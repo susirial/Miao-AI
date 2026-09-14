@@ -25,7 +25,7 @@
   <img src="docs/images/hero-desktop.png" alt="喵 AI：Agent 对话与无限画布">
 </p>
 
-**喵 AI**（Miao）是本地优先的创作助手：你和 Agent 对话，每一张图、每一段视频都落在无限画布上。它是 [PoloX AI](https://github.com/saihhold-zhao/polox_ai) 的中国大模型特化分支，推理走国内官方 API，而不是 WaveSpeed。
+**喵 AI**（Miao）是本地优先的创作助手：你和 Agent 对话，每一张图、每一段视频都落在无限画布上。本项目由 [PoloX AI](https://github.com/saihhold-zhao/polox_ai) 魔改而来。
 
 使用你自己的密钥。无需注册喵 AI 账号或云端工作区。项目、对话、生成记录和媒体都保存在本机。
 
@@ -154,17 +154,6 @@ flowchart LR
 
 没有在线 Demo。工作区接口默认不鉴权 —— 请只在本机或私有网络运行 Web 服务。
 
-## 与 PoloX AI 的差异
-
-| | 喵 AI | PoloX AI |
-| --- | --- | --- |
-| 推理 | 火山方舟、DeepSeek、Z.ai | WaveSpeed |
-| 图像 / 视频 | Seedream 5 · Seedance 2 | WaveSpeed 目录 |
-| 桌面 | macOS Electron | Web |
-| 数据 | 本地 SQLite | 本地 SQLite |
-
-喵 AI 保留 PoloX 的 Agent 画布工作流和 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 基础。属于 PoloX 本身的改动请提到 [上游仓库](https://github.com/saihhold-zhao/polox_ai)。
-
 ## 创作流程
 
 可以让 Agent 编辑图片或视频，或制作多分镜成片。长视频的典型路径：
@@ -208,7 +197,6 @@ pnpm test:electron-main
 | UI | [shadcn/ui](https://github.com/shadcn-ui/ui) Vue 生态 |
 | UI 模板 | [nuxt-shadcn-dashboard](https://github.com/dianprata/nuxt-shadcn-dashboard) |
 | Agent Harness | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) |
-| 上游产品 | [PoloX AI](https://github.com/saihhold-zhao/polox_ai) |
 
 ## 开源协议
 

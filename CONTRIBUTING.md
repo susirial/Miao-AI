@@ -1,6 +1,6 @@
 # Contributing to Miao AI
 
-Thank you for helping improve Miao. This repository is a China-native fork of [PoloX AI](https://github.com/saihhold-zhao/polox_ai). Please open issues and pull requests **here**, not on the upstream project, unless the change belongs in PoloX itself.
+Thank you for helping improve Miao. Please open issues and pull requests in this repository.
 
 [简体中文](CONTRIBUTING.zh-CN.md)
 

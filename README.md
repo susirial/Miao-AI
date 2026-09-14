@@ -25,7 +25,7 @@
   <img src="docs/images/hero-desktop.png" alt="Miao AI — agent conversation and infinite canvas">
 </p>
 
-**Miao** (喵 AI) is a local-first creative assistant: you talk to an agent, and every still or clip lands on an infinite canvas. It is a China-native fork of [PoloX AI](https://github.com/saihhold-zhao/polox_ai), rebuilt for official mainland-China model APIs instead of WaveSpeed.
+**Miao** (喵 AI) is a local-first creative assistant: you talk to an agent, and every still or clip lands on an infinite canvas. It is a modified build of [PoloX AI](https://github.com/saihhold-zhao/polox_ai).
 
 Bring your own keys. There is no Miao account or cloud workspace. Projects, chats, generation history, and media stay on your machine.
 
@@ -154,17 +154,6 @@ flowchart LR
 
 There is no hosted demo. The workspace routes are unauthenticated by design — run the web server only on your machine or a private network.
 
-## Compared with PoloX AI
-
-| | Miao AI | PoloX AI |
-| --- | --- | --- |
-| Inference | Volcengine Ark, DeepSeek, Z.ai | WaveSpeed |
-| Image / video | Seedream 5 · Seedance 2 | WaveSpeed catalog |
-| Desktop | macOS Electron | Web |
-| Data | Local SQLite | Local SQLite |
-
-Miao keeps PoloX’s agent-native canvas workflow and [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) foundation. Changes that belong in PoloX itself should go [upstream](https://github.com/saihhold-zhao/polox_ai).
-
 ## Creative workflows
 
 Ask the agent to edit an image or video, or to produce a multi-shot piece. A typical long-form video pass:
@@ -208,7 +197,6 @@ pnpm test:electron-main
 | UI | [shadcn/ui](https://github.com/shadcn-ui/ui) Vue ecosystem |
 | UI template | [nuxt-shadcn-dashboard](https://github.com/dianprata/nuxt-shadcn-dashboard) |
 | Agent harness | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) |
-| Upstream product | [PoloX AI](https://github.com/saihhold-zhao/polox_ai) |
 
 ## License
 

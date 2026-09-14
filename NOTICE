@@ -1,8 +1,8 @@
 Miao AI
 Copyright (c) 2026 susirial
 
-This product is a China-native fork of PoloX AI
-(https://github.com/saihhold-zhao/polox_ai), released under the MIT License.
+This product is based on PoloX AI
+(https://github.com/saihhold-zhao/polox_ai).
 
 It also incorporates code originally derived from nuxt-shadcn-dashboard
 (https://github.com/dianprata/nuxt-shadcn-dashboard), Copyright (c) 2024 Dian Pratama.

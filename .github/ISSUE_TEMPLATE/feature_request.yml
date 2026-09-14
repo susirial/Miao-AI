@@ -1,12 +1,12 @@
 name: Feature request
-description: Suggest a model, workflow, or product improvement for this fork.
+description: Suggest a model, workflow, or product improvement.
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        Miao AI focuses on mainland-China model providers, a local-first agent workspace, and an infinite canvas. Please say whether this belongs here or in [PoloX AI](https://github.com/saihhold-zhao/polox_ai).
+        Miao AI is a local-first creative assistant for mainland-China model providers, with agent chat and an infinite canvas.
   - type: dropdown
     id: area
     attributes:
@@ -38,4 +38,4 @@ body:
     id: alternatives
     attributes:
       label: Alternatives
-      description: Other approaches you considered, including using PoloX or a provider console directly.
+      description: Other approaches you considered.

@@ -3,6 +3,3 @@ contact_links:
   - name: Security report
     url: https://github.com/susirial/Miao-AI/security/advisories/new
     about: Report a vulnerability privately. Do not post API keys or security issues in public tickets.
-  - name: PoloX AI upstream
-    url: https://github.com/saihhold-zhao/polox_ai
-    about: Changes that belong in PoloX itself, not this China-native fork.
