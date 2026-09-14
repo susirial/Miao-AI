@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest a model, workflow, or product improvement for this fork.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Miao AI focuses on mainland-China model providers, a local-first agent workspace, and an infinite canvas. Please say whether this belongs here or in [PoloX AI](https://github.com/saihhold-zhao/polox_ai).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Models / providers
+        - Agent / skills
+        - Canvas / studio
+        - Desktop
+        - Docs / DX
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that is awkward or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should Miao do instead?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other approaches you considered, including using PoloX or a provider console directly.

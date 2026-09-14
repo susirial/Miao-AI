@@ -1,0 +1,4 @@
+interface:
+  display_name: Miao UI
+  short_description: Build interfaces that match the Miao gallery-white creative workspace
+  default_prompt: Use $polox-ui to design or update this Nuxt interface consistently.

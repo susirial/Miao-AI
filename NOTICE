@@ -1,0 +1,20 @@
+Miao AI
+Copyright (c) 2026 susirial
+
+This product is a China-native fork of PoloX AI
+(https://github.com/saihhold-zhao/polox_ai), released under the MIT License.
+
+It also incorporates code originally derived from nuxt-shadcn-dashboard
+(https://github.com/dianprata/nuxt-shadcn-dashboard), Copyright (c) 2024 Dian Pratama.
+
+Third-party projects used at runtime or as foundations include:
+
+- Nuxt (https://github.com/nuxt/nuxt)
+- Vue (https://github.com/vuejs/core)
+- shadcn/ui and its Vue ecosystem (https://github.com/shadcn-ui/ui)
+- DeepSeek Harness (https://github.com/deepseek-ai/deepseek-harness)
+- Electron (https://github.com/electron/electron)
+
+Original copyright and license notices of those projects are retained in their
+respective packages. API inference is provided by third-party model vendors
+(Volcengine Ark, DeepSeek, Z.ai); their terms apply separately to API usage.

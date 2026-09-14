@@ -1,0 +1,63 @@
+name: Bug report
+description: Something is broken in Miao AI (web or macOS desktop).
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Remove API keys, TOS secrets, and personal project data before submitting.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Web (`pnpm dev`)
+        - macOS desktop (`pnpm desktop:dev` or packaged app)
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.6 / Ubuntu 24.04 / Windows 11
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js and pnpm versions
+      placeholder: node 22.20.0, pnpm 10.10.0
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what actually happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste relevant terminal or desktop logs with secrets removed.
+      render: text
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues.
+          required: true
+        - label: This report does not contain API keys or other secrets.
+          required: true
