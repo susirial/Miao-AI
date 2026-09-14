@@ -14,7 +14,7 @@ export default defineNuxtConfig({
       brandName: 'Miao',
       heroTitle: 'Create beyond the prompt.',
       heroTagline: 'Shape every frame.',
-      heroDescription: 'Create images and videos with an agent-native workflow and an infinite canvas.',
+      heroDescription: 'An open creative assistant for foundation models — text, image, and video — on an infinite canvas.',
       apiUrl: '',
       siteUrl,
     },

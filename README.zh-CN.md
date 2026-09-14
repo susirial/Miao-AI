@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/images/logo.png" width="88" alt="妙 AI 标志">
+  <img src="docs/images/logo.png" width="88" alt="喵 AI 标志">
 </p>
 
-<h1 align="center">妙 AI</h1>
+<h1 align="center">喵 AI</h1>
 
 <p align="center">
-  面向中国大模型的多模态 AI Agent。<br>
-  用 GLM、DeepSeek、豆包、Seedream、Seedance 对话、生成、编辑 —— 全部落在无限画布上。
+  <strong>M</strong> 大模型 · <strong>I</strong> 智能 · <strong>A</strong> 创作助手 · <strong>O</strong> 开放<br>
+  面向中国大模型的开放创作助手。用对话调用文本、图像与视频，结果落在无限画布上。
 </p>
 
 <p align="center">
@@ -22,27 +22,36 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/hero-desktop.png" alt="妙 AI：Agent 对话与无限画布">
+  <img src="docs/images/hero-desktop.png" alt="喵 AI：Agent 对话与无限画布">
 </p>
 
-Miao 是本地优先的 **Agent 原生**创作工作区：交互发生在对话里，结果落在无限画布上。它是 [PoloX AI](https://github.com/saihhold-zhao/polox_ai) 的中国大模型特化分支，推理走国内官方 API，而不是 WaveSpeed。
+**喵 AI**（Miao）是本地优先的创作助手：你和 Agent 对话，每一张图、每一段视频都落在无限画布上。它是 [PoloX AI](https://github.com/saihhold-zhao/polox_ai) 的中国大模型特化分支，推理走国内官方 API，而不是 WaveSpeed。
 
-使用你自己的密钥。无需 Miao 账号或云端工作区。项目、对话、生成记录和媒体都保存在本机。
+使用你自己的密钥。无需注册喵 AI 账号或云端工作区。项目、对话、生成记录和媒体都保存在本机。
 
-## 为什么用 Miao
+## MIAO 四个字母
 
-- **Agent + 画布，而不是提示词输入框。** 规划需求、确认模型、生成图片或视频，在同一条对话里持续迭代。
-- **中国大模型。** GLM 5.3、DeepSeek、豆包 Seed 文本、Seedream 5.0 Pro、Seedance 2.0。更多服务商仍在接入。
-- **Web 与 macOS 桌面。** 同一套 Nuxt 应用；Electron 只监听 `127.0.0.1`。
-- **本地 SQLite。** 密钥只在你配置的服务商请求中离开本机。
+| | 含义 | 在产品里 |
+| --- | --- | --- |
+| **M** | 大模型 | 文本、生图、视频等模型：GLM、DeepSeek、豆包、Seedream、Seedance，并持续接入 |
+| **I** | 智能 | Agent 会规划、确认关键选择，并执行多步制作 |
+| **A** | 创作助手 | 对话 + 无限画布，而不是一个提示词输入框 |
+| **O** | 开放 | MIT 开源、本地运行、自带 Key |
+
+## 为什么用喵 AI
+
+- **大模型在同一条对话里。** 用 `@` 指定 GLM 5.3、DeepSeek、豆包 Seed、Seedream 5 或 Seedance 2，不必跳出工作流。
+- **智能会把事情做完。** Agent 把一句话变成分镜、静帧或视频，并继续和你一起改。
+- **创作助手，不是聊天窗口。** 每个结果留在画布上，方便比较、复用和导出。
+- **开放，且在你的机器上。** Web 与 macOS 桌面；数据在本地 SQLite；没有喵 AI 云。
 
 ## 截图
 
 <p align="center">
-  <img src="docs/images/landing.png" alt="Miao 落地页">
+  <img src="docs/images/landing.png" alt="喵 AI 落地页">
 </p>
 <p align="center">
-  <img src="docs/images/projects.png" alt="Miao 项目工作区">
+  <img src="docs/images/projects.png" alt="喵 AI 项目工作区">
 </p>
 <p align="center">
   <img src="docs/images/models.png" alt="Seedream 与 Seedance 模型卡片">
@@ -107,7 +116,7 @@ sudo apt update && sudo apt install ffmpeg
 
 ## 配置服务商
 
-1. 启动 Miao，点击右上角 **服务连接**。
+1. 启动喵 AI，点击右上角 **服务连接**。
 2. 填写 [火山方舟 API Key](https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey)。方舟提供 Seed 文本、Seedream 图像和 Seedance 视频。
 3. 可选填写 [DeepSeek](https://platform.deepseek.com/api_keys) 或 [Z.ai](https://z.ai/manage-apikey/apikey-list) 密钥，并选择对应文本模型。
 4. 点击 **保存并测试已配置服务**。
@@ -116,7 +125,7 @@ sudo apt update && sudo apt install ffmpeg
 
 ### 可选 TOS：Seedance 本地参考素材
 
-文生视频和图生视频不需要 TOS。仅当把本机视频/音频作为 Seedance 参考时，才需要 `cn-beijing` 的 Bucket。Region 与 endpoint 固定为 `https://tos-cn-beijing.volces.com`。Miao 按内容哈希上传对象并签发短期 GET URL；删除任务时不会删除 TOS 对象。
+文生视频和图生视频不需要 TOS。仅当把本机视频/音频作为 Seedance 参考时，才需要 `cn-beijing` 的 Bucket。Region 与 endpoint 固定为 `https://tos-cn-beijing.volces.com`。喵 AI 按内容哈希上传对象并签发短期 GET URL；删除任务时不会删除 TOS 对象。
 
 ## 架构
 
@@ -147,14 +156,14 @@ flowchart LR
 
 ## 与 PoloX AI 的差异
 
-| | 妙 AI | PoloX AI |
+| | 喵 AI | PoloX AI |
 | --- | --- | --- |
 | 推理 | 火山方舟、DeepSeek、Z.ai | WaveSpeed |
 | 图像 / 视频 | Seedream 5 · Seedance 2 | WaveSpeed 目录 |
 | 桌面 | macOS Electron | Web |
 | 数据 | 本地 SQLite | 本地 SQLite |
 
-Miao 保留 PoloX 的 Agent 画布工作流和 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 基础。属于 PoloX 本身的改动请提到 [上游仓库](https://github.com/saihhold-zhao/polox_ai)。
+喵 AI 保留 PoloX 的 Agent 画布工作流和 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 基础。属于 PoloX 本身的改动请提到 [上游仓库](https://github.com/saihhold-zhao/polox_ai)。
 
 ## 创作流程
 

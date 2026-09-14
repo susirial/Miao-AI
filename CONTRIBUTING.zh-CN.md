@@ -1,6 +1,6 @@
-# 参与贡献 Miao AI
+# 参与贡献喵 AI
 
-感谢你帮助改进 Miao。本仓库是 [PoloX AI](https://github.com/saihhold-zhao/polox_ai) 的中国大模型特化分支。请把 Issue 和 Pull Request 开在 **本仓库**；只有改动确实属于上游时，再开到 PoloX。
+感谢你帮助改进喵 AI（Miao）。本仓库是 [PoloX AI](https://github.com/saihhold-zhao/polox_ai) 的中国大模型特化分支。请把 Issue 和 Pull Request 开在 **本仓库**；只有改动确实属于上游时，再开到 PoloX。
 
 [English](CONTRIBUTING.md)
 

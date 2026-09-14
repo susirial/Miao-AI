@@ -3,7 +3,7 @@
   "type": "module",
   "version": "1.0.2",
   "packageManager": "pnpm@10.10.0",
-  "description": "China-native multimodal AI agent: DeepSeek, GLM, Doubao, Seedream and Seedance on an infinite canvas. Desktop and web.",
+  "description": "MIAO: Models, Intelligence, Assistant, Open. A local-first creative assistant for DeepSeek, GLM, Doubao, Seedream and Seedance.",
   "author": "susirial",
   "license": "MIT",
   "homepage": "https://github.com/susirial/Miao-AI",

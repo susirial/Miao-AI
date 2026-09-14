@@ -5,8 +5,8 @@
 <h1 align="center">Miao AI</h1>
 
 <p align="center">
-  China-native multimodal AI agent.<br>
-  Chat, generate, and edit with GLM, DeepSeek, Doubao, Seedream, and Seedance — on an infinite canvas.
+  <strong>M</strong>odels · <strong>I</strong>ntelligence · <strong>A</strong>ssistant · <strong>O</strong>pen<br>
+  An open creative assistant for Chinese foundation models — text, image, and video — on an infinite canvas.
 </p>
 
 <p align="center">
@@ -25,16 +25,25 @@
   <img src="docs/images/hero-desktop.png" alt="Miao AI — agent conversation and infinite canvas">
 </p>
 
-Miao is a local-first, **agent-native** creative workspace: every interaction lives in a conversation, and every result lands on an infinite canvas. It is a China-native fork of [PoloX AI](https://github.com/saihhold-zhao/polox_ai), rebuilt for official mainland-China model APIs instead of WaveSpeed.
+**Miao** (喵 AI) is a local-first creative assistant: you talk to an agent, and every still or clip lands on an infinite canvas. It is a China-native fork of [PoloX AI](https://github.com/saihhold-zhao/polox_ai), rebuilt for official mainland-China model APIs instead of WaveSpeed.
 
 Bring your own keys. There is no Miao account or cloud workspace. Projects, chats, generation history, and media stay on your machine.
 
+## What MIAO means
+
+| | Meaning | In the product |
+| --- | --- | --- |
+| **M** | Models | Text, image, and video models — GLM, DeepSeek, Doubao, Seedream, Seedance, and more to come |
+| **I** | Intelligence | An agent that plans, confirms choices, and runs multi-step production |
+| **A** | Assistant | A creative partner on a canvas, not a prompt box |
+| **O** | Open | MIT licensed, local-first, bring your own keys |
+
 ## Why Miao
 
-- **Agent + canvas, not a prompt box.** Plan a brief, confirm models, generate stills or clips, and keep iterating in one thread.
-- **China-native models.** GLM 5.3, DeepSeek, Doubao Seed text, Seedream 5.0 Pro, and Seedance 2.0. More providers are being added.
-- **Web and macOS desktop.** Same Nuxt app in the browser or in an Electron shell that binds only to `127.0.0.1`.
-- **Local SQLite.** API keys never leave the machine except when sent to the providers you configured.
+- **Models, in one thread.** Pin GLM 5.3, DeepSeek, Doubao Seed, Seedream 5, or Seedance 2 with `@` without leaving the conversation.
+- **Intelligence that produces.** The agent turns a brief into stills, clips, and storyboards, then keeps iterating with you.
+- **A creative assistant, not a chatbot.** Every result stays on the canvas so you can compare, reuse, and export.
+- **Open by default.** Web and macOS desktop; SQLite on your machine; no Miao cloud.
 
 ## Screenshots
 
