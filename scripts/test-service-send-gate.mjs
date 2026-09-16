@@ -24,7 +24,7 @@ test('blocked send never reaches the lab or clears its draft',async()=>{
  let allowed=false
  const module={exports:{}}
  vm.runInNewContext(ts.transpileModule(fn.getText(ast),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
-  module,exports:module.exports,useServiceConnection:()=>({ensureConnected:async()=>allowed}),toValue:v=>v,agentLabCacheKey:()=>'',agentLabs:new Map(),effectScope:()=>({run:fn=>fn()}),createAgentLab:()=>lab,shallowRef:value=>({value}),watch:()=>{},onMounted:()=>{},onUnmounted:()=>{},isRef:v=>!!v&&typeof v==='object'&&'value'in v,computed:v=>v,
+  module,exports:module.exports,useServiceConnection:()=>({ensureConnected:async()=>allowed}),useI18n:()=>({locale:{value:'zh'}}),uiLocale:{value:''},watchEffect:fn=>fn(),toValue:v=>v,agentLabCacheKey:()=>'',agentLabs:new Map(),effectScope:()=>({run:fn=>fn()}),createAgentLab:()=>lab,shallowRef:value=>({value}),watch:()=>{},onMounted:()=>{},onUnmounted:()=>{},isRef:v=>!!v&&typeof v==='object'&&'value'in v,computed:v=>v,
  })
  const publicLab=module.exports.useAgentLab()
  assert.equal(await publicLab.sendMessage({newAgent:true}),false)

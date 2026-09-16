@@ -1,5 +1,6 @@
 import type { AgentConfirmPolicy, AgentQuality } from '~~/shared/types/agentPreferences'
 import type { GenerationJobPublic } from '~~/shared/types/generation'
+import type { ImageAnnotationEdit } from '~~/shared/utils/imageAnnotations'
 import { isGenerationFailureRetryable, isNonRetryableGenerationFailure, publicGenerationFailMessage } from '~~/shared/types/generation'
 import { isInternalAgentChatText, publicAgentChatText } from '~~/shared/utils/agentChatVisibility'
 import { isAgentTransientMessage } from '~~/shared/utils/agentHistoryVisibility'
@@ -8,6 +9,7 @@ import { agentStopNote, dropStaleStopNotesForPendingChoice, isAgentStopNote } fr
 import { isMediaUrl, isMediaVideoUrl } from '~~/shared/utils/mediaUrl'
 import { confirmationMedia, reconcileConfirmationStates } from '~/utils/agentConfirmationState'
 import { buildOptimisticGenerationImages } from '~/utils/agentOptimisticGeneration'
+import { collectProjectCanvasImages, dropRemovedCanvasImages, dropRemovedImageIdsFromMessages, sessionIdsOwningImages, stripRemovedImagesFromAgent } from '~/utils/canvasImageDelete'
 import { useServiceConnection } from './useServiceConnection'
 
 export type { AgentConfirmPolicy, AgentQuality }
@@ -103,6 +105,8 @@ export interface ChoiceAnswer {
   label?: string
   text?: string
   skipped?: boolean
+  annotationEdit?: ImageAnnotationEdit
+  referenceImages?: Array<{ url: string, name: string }>
 }
 export interface AgentChatMessage {
   id: string
@@ -239,7 +243,11 @@ function isSessionLockError(message: string) {
   return /this session is already running|this agent lab session is already running/i.test(message)
 }
 function isEmptyStoredAgent(agent: StoredAgent) {
-  return !agent.sessionId && !(agent.messages || []).length && !(agent.images || []).length
+  // An unsent draft (a picked skill, a typed prompt) is real work: keep that agent.
+  return !agent.sessionId
+    && !(agent.messages || []).length
+    && !(agent.images || []).length
+    && !(agent.draft || '').trim()
 }
 function mergeSessionImages(local: AgentImage[], remote: AgentImage[]) {
   const byId = new Map(local.map(item => [item.id, item]))
@@ -345,6 +353,8 @@ function clearComposerDraft() {
   writeComposerDraft('')
 }
 const agentLabs = new Map<string, ReturnType<typeof createAgentLab>>()
+/** Interface language, so the agent answers in it even on an attachment-only turn. */
+const uiLocale = ref('')
 function agentLabCacheKey(projectId: string) {
   const pid = String(projectId || '').trim()
   if (!pid)
@@ -356,6 +366,10 @@ export function useAgentLab(options?: {
   onJobs?: (jobs: GenerationJobPublic[]) => void
 }) {
   const connection = useServiceConnection()
+  const { locale } = useI18n()
+  watchEffect(() => {
+    uiLocale.value = String(locale.value || '')
+  })
   function resolveLab() {
     const projectId = String(toValue(options?.projectId) || '').trim()
     const key = agentLabCacheKey(projectId)
@@ -410,10 +424,22 @@ function createAgentLab(options?: {
   const persistingCanvasIds = new Set<string>()
   const patchedInputIds = new Set<string>()
   const removedCanvasImageIds = new Set<string>()
+  const removedCanvasImageVersion = ref(0)
+  function rememberRemovedImageIds(ids: Iterable<string>) {
+    let changed = false
+    for (const raw of ids) {
+      const id = String(raw || '').trim()
+      if (!id || removedCanvasImageIds.has(id))
+        continue
+      removedCanvasImageIds.add(id)
+      changed = true
+    }
+    if (changed)
+      removedCanvasImageVersion.value += 1
+  }
   function withoutRemovedImages(items: AgentImage[]) {
-    if (!removedCanvasImageIds.size)
-      return items
-    return items.filter(item => !removedCanvasImageIds.has(item.id))
+    void removedCanvasImageVersion.value
+    return dropRemovedCanvasImages(items, removedCanvasImageIds)
   }
   const storageKey = computed(() => `${STORAGE_PREFIX}${projectScope.value || 'home'}`)
   const sessionId = ref('')
@@ -460,6 +486,16 @@ function createAgentLab(options?: {
       : Boolean(agent.busy || agent.pending || (agent.status && agent.status !== 'idle'))
     return { id: agent.id, title, busy }
   }))
+  const allImages = computed<AgentImage[]>(() => {
+    void removedCanvasImageVersion.value
+    return collectProjectCanvasImages(storedAgents.value, images.value, removedCanvasImageIds)
+  })
+  function sessionIdsForImages(imageIds: string[]) {
+    return sessionIdsOwningImages([
+      { sessionId: sessionId.value, images: images.value },
+      ...storedAgents.value,
+    ], imageIds)
+  }
   function bumpStream() {
     streamEpoch += 1
     return streamEpoch
@@ -550,11 +586,15 @@ function createAgentLab(options?: {
     agentTitle.value = agent.title || DEFAULT_AGENT_TITLE
     titleSource.value = agent.titleSource || 'default'
     sessionId.value = agent.sessionId || ''
-    messages.value = sanitizeChatMessages((agent.messages || []).map(item => ({
-      ...item,
-      streaming: false,
-    })))
-    images.value = [...(agent.images || [])]
+    const stripped = stripRemovedImagesFromAgent({
+      images: agent.images || [],
+      messages: (agent.messages || []).map(item => ({
+        ...item,
+        streaming: false,
+      })),
+    }, removedCanvasImageIds)
+    messages.value = sanitizeChatMessages(stripped.messages)
+    images.value = [...stripped.images]
     reconcileConfirmationStates(messages.value, images.value)
     const pendingCard = messages.value.find(item => item.confirmationState === 'pending' && item.confirmation)
     const pendingChoiceCard = messages.value.find(item => item.choiceState === 'pending' && item.choice)
@@ -731,7 +771,7 @@ function createAgentLab(options?: {
         })
       }
     }
-    return { history, images: imagesOut }
+    return { history, images: imagesOut, locale: uiLocale.value }
   }
   function trimLab() {
     messages.value = trimChatMessages(messages.value)
@@ -847,12 +887,10 @@ function createAgentLab(options?: {
     const ids = new Set(imageIds.map(id => String(id || '').trim()).filter(Boolean))
     if (!ids.size)
       return
-    for (const id of ids)
-      removedCanvasImageIds.add(id)
+    rememberRemovedImageIds(ids)
     images.value = images.value.filter(image => !ids.has(image.id))
-    messages.value = messages.value.map(message => message.imageIds?.some(id => ids.has(id))
-      ? { ...message, imageIds: message.imageIds.filter(id => !ids.has(id)) }
-      : message)
+    messages.value = dropRemovedImageIdsFromMessages(messages.value, ids)
+    storedAgents.value = storedAgents.value.map(agent => stripRemovedImagesFromAgent(agent, ids))
     writeStore()
     await persistChat(true)
   }
@@ -1111,10 +1149,10 @@ function createAgentLab(options?: {
       title: current.titleSource === 'manual' ? current.title : (incoming.title || current.title),
       titleSource: current.titleSource === 'manual' ? 'manual' : (incoming.titleSource || current.titleSource),
       sessionId: current.sessionId || incoming.sessionId,
-      messages: recoverAgentTranscript(currentMessages, incomingMessages, row => ({
+      messages: dropRemovedImageIdsFromMessages(recoverAgentTranscript(currentMessages, incomingMessages, row => ({
         ...row,
         id: row.id || crypto.randomUUID(),
-      })),
+      })), removedCanvasImageIds),
       images: withoutRemovedImages(unionSessionImages(current.images || [], incoming.images || [])),
       confirmation: current.confirmation || incoming.confirmation || null,
       choice: current.choice || incoming.choice || null,
@@ -1267,11 +1305,11 @@ function createAgentLab(options?: {
         error.value = ''
       // SSE and polling must not both append the same assistant turn.
       if (activeTurns === 0 && Array.isArray(data.messages)) {
-        messages.value = recoverAgentTranscript(messages.value, data.messages, row => ({
+        messages.value = dropRemovedImageIdsFromMessages(recoverAgentTranscript(messages.value, data.messages, row => ({
           ...row,
           id: row.id || crypto.randomUUID(),
           streaming: false,
-        }))
+        })), removedCanvasImageIds)
       }
       if (typeof data.title === 'string' && data.title.trim() && titleSource.value !== 'manual') {
         agentTitle.value = data.title.trim()
@@ -1541,7 +1579,7 @@ function createAgentLab(options?: {
         })
       }
     }
-    if (event.type === 'image' && event.image) {
+    if (event.type === 'image' && event.image && !removedCanvasImageIds.has(event.image.id)) {
       const index = state.images.findIndex(item => item.id === event.image!.id)
       const known = index >= 0
       if (index >= 0)
@@ -1762,20 +1800,25 @@ function createAgentLab(options?: {
     }
     clearLabError()
     for (const item of unique) {
-      const imageId = crypto.randomUUID()
-      images.value.unshift({
-        id: imageId,
-        kind: 'upload',
-        status: 'success',
-        prompt: item.name || 'Canvas still',
-        aspectRatio: 'auto',
-        resolution: '',
-        url: item.url,
-        error: '',
-      })
+      // Canvas stills and freshly uploaded images already live in the canvas; a
+      // second entry for the same URL would render a duplicate card.
+      const existing = images.value.find(image => image.url === item.url)
+      const imageId = existing?.id || crypto.randomUUID()
+      if (!existing) {
+        images.value.unshift({
+          id: imageId,
+          kind: 'upload',
+          status: 'success',
+          prompt: item.name || 'Canvas still',
+          aspectRatio: 'auto',
+          resolution: '',
+          url: item.url,
+          error: '',
+        })
+      }
       attachments.value = [...attachments.value, {
         id: crypto.randomUUID(),
-        name: item.name || 'Canvas still',
+        name: item.name || existing?.name || 'Canvas still',
         previewUrl: item.url,
         url: item.url,
         status: 'ready',
@@ -1784,6 +1827,34 @@ function createAgentLab(options?: {
       }]
     }
   }
+  async function uploadAnnotationImage(file: File, label?: string) {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type) || file.size > 10 * 1024 * 1024)
+      throw new Error('Upload a JPEG, PNG, WEBP, or GIF up to 10MB.')
+    const id = await ensureSession()
+    const body = new FormData()
+    body.append('file', file)
+    const query = new URLSearchParams({ sessionId: id, ...(label ? { name: label } : {}) })
+    const response = await fetch(`${baseUrl}/v1/uploads?${query}`, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: labHeaders(false, crypto.randomUUID()),
+      body,
+    })
+    const payload = await response.json().catch(() => ({})) as {
+      sessionId?: string
+      image?: AgentImage
+      error?: string
+    }
+    if (!response.ok || !payload.image?.url)
+      throw new Error(readErrorMessage(payload, 'Upload failed'))
+    if (payload.sessionId)
+      sessionId.value = payload.sessionId
+    const image = payload.image
+    images.value = [image, ...images.value.filter(item => item.id !== image.id)]
+    await persistChat()
+    return { url: image.url, name: label || image.name || file.name.slice(0, 100) }
+  }
+
   async function attachFiles(fileList: File[]) {
     const accepted = fileList.filter((file) => {
       const type = file.type.toLowerCase()
@@ -1855,7 +1926,38 @@ function createAgentLab(options?: {
   }
   async function sendMessage(options?: {
     newAgent?: boolean
-  }) {
+    sketchFile?: File
+    sketchName?: string
+    annotationEdit?: ImageAnnotationEdit
+  }): Promise<boolean> {
+    if (options?.sketchFile) {
+      if (pending.value || waitingForUser.value || attaching.value || status.value === 'generating' || status.value === 'queued')
+        return false
+      if (attachments.value.length >= 9)
+        throw new Error('Remove an attachment to make room for the sketch.')
+      const originAgent = activeAgentId.value
+      let sketchAttachmentId = ''
+      try {
+        const image = await uploadAnnotationImage(options.sketchFile, options.sketchName)
+        if (originAgent !== activeAgentId.value)
+          throw new Error('The active agent changed. Send the sketch again.')
+        attachUrls([image])
+        const sketch = attachments.value.find(item => item.url === image.url)
+        if (!sketch)
+          throw new Error('Could not attach the sketch.')
+        sketchAttachmentId = sketch.id
+        attachments.value = [sketch, ...attachments.value.filter(item => item.id !== sketch.id)]
+        const sent: boolean = await sendMessage({ ...options, sketchFile: undefined })
+        if (!sent)
+          removeAttachment(sketchAttachmentId)
+        return sent
+      }
+      catch (cause) {
+        if (sketchAttachmentId)
+          removeAttachment(sketchAttachmentId)
+        throw cause
+      }
+    }
     const text = draft.value.trim()
     const ready = readyAttachments.value
     if (options?.newAgent) {
@@ -1917,7 +2019,7 @@ function createAgentLab(options?: {
     const epoch = streamEpoch
     const runAgentId = activeAgentId.value
     writeStore()
-    void runAgentTurn(epoch, runAgentId, text, urls)
+    void runAgentTurn(epoch, runAgentId, text, urls, options?.annotationEdit)
     return true
   }
   async function stopAgent() {
@@ -1982,7 +2084,7 @@ function createAgentLab(options?: {
       return false
     }
   }
-  async function runAgentTurn(epoch: number, runAgentId: string, text: string, urls: string[]) {
+  async function runAgentTurn(epoch: number, runAgentId: string, text: string, urls: string[], annotationEdit?: ImageAnnotationEdit) {
     activeTurns += 1
     try {
       let locked = false
@@ -1997,6 +2099,7 @@ function createAgentLab(options?: {
             message: text,
             attachments: urls,
             confirmPolicy: confirmPolicy.value,
+            ...(annotationEdit ? { annotationEdit } : {}),
             ...agentContextSnapshot(),
           }),
         })
@@ -2837,6 +2940,8 @@ function createAgentLab(options?: {
     busy,
     queueNotice,
     agents,
+    allImages,
+    sessionIdsForImages,
     activeAgentId,
     canCreateAgent,
     canSwitchAgent,
@@ -2846,6 +2951,7 @@ function createAgentLab(options?: {
     stopAgent,
     stopping,
     attachFiles,
+    uploadAnnotationImage,
     attachUrls,
     removeAttachment,
     removeCanvasImages,

@@ -15,6 +15,8 @@ const MAX_RATIO = 0.46
 const STEP = 16
 const HANDLE_SIZE = 16
 const DEFAULT_BOTTOM_RATIO = 0.58
+// Below this the stacked conversation is unusable, so collapse it instead.
+const MIN_BOTTOM = 200
 
 const container = ref<HTMLElement | null>(null)
 const rightWidth = ref(DEFAULT_WIDTH)
@@ -37,18 +39,26 @@ function clampWidth(width: number) {
   return Math.min(MAX_WIDTH, viewportMax, Math.max(MIN_WIDTH, Math.round(width)))
 }
 
-function setBottomHeight(height: number) {
+function setBottomHeight(height: number, fromDrag = false) {
   const max = paneMax()
   bottomMax.value = max
-  const next = Math.min(max, Math.max(0, Math.round(height)))
+  // Mid-layout the container can measure zero; writing that would persist an
+  // unrecoverable 0 ratio and leave the conversation stuck at no height.
+  if (!max)
+    return
+  const floor = Math.min(MIN_BOTTOM, max)
+  const requested = Math.round(height)
+  if (fromDrag && requested < floor / 2 && !collapsed.value) {
+    collapsed.value = true
+    persistCollapsed()
+  }
+  const next = Math.min(max, Math.max(floor, requested))
   bottomHeight.value = next
-  bottomRatio.value = max > 0 ? next / max : DEFAULT_BOTTOM_RATIO
+  bottomRatio.value = next / max
 }
 
 function syncBottomFromRatio() {
-  const max = paneMax()
-  if (max)
-    setBottomHeight(max * bottomRatio.value)
+  setBottomHeight(paneMax() * bottomRatio.value)
 }
 
 function persistWidth() {
@@ -124,7 +134,7 @@ function onVerticalPointerDown(event: PointerEvent) {
   const startY = event.clientY
   const startHeight = bottomHeight.value
   bindDrag(handle, event.pointerId, (moveEvent) => {
-    setBottomHeight(startHeight + startY - moveEvent.clientY)
+    setBottomHeight(startHeight + startY - moveEvent.clientY, true)
   }, persistBottom)
 }
 

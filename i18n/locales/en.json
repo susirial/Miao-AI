@@ -150,6 +150,33 @@
     "createAnotherFirst": "Create another project first.",
     "move": "Move"
   },
+  "skills": {
+    "eyebrow": "Creative workflows",
+    "title": "Skills",
+    "projectDescription": "Start with a guided workflow, then refine every decision with the agent in your project.",
+    "choose": "Choose a skill",
+    "empty": "No matching skills",
+    "keyboardHelp": "↑ ↓ Navigate · Enter Select · Esc Close",
+    "remove": "Remove {name} skill",
+    "items": {
+      "image-annotation-edit": {
+        "name": "Annotated Image Edit",
+        "description": "Pin exact locations and describe each image change."
+      },
+      "sketch-to-image": {
+        "name": "Sketch to Image",
+        "description": "Draw a rough composition and develop it into a finished image."
+      },
+      "app-store-graphics": {
+        "name": "App Store Graphics",
+        "description": "Turn real app screenshots into a consistent marketing set."
+      },
+      "long-form-video": {
+        "name": "Long-form Video",
+        "description": "Plan, review, and produce a multi-shot film."
+      }
+    }
+  },
   "chat": {
     "newAgent": "New",
     "switchAgent": "Switch agent",
@@ -186,11 +213,102 @@
     "reviewDescription": "Confirm only when the agent thinks a review is needed.",
     "alwaysReviewDescription": "Confirm every generation.",
     "shiftEnter": "Shift Enter to send",
-    "composerPlaceholder": "Type {mention} to choose a model, or share your idea and I’ll help you plan it.",
+    "enterSend": "Enter to send; Shift Enter for a new line",
+    "dropImages": "Drop images to attach",
+    "dropImagesDescription": "JPEG, PNG, WEBP, or GIF · up to 10 MB each",
+    "composerPlaceholder": "Type {mention} to choose a model, asset, or skill—or share your idea and I’ll help you plan it.",
     "composerNext": "What do you want to create next?",
     "copyInstruction": "Copy",
     "copiedInstruction": "Copied",
-    "copyInstructionFailed": "Could not copy"
+    "copyInstructionFailed": "Could not copy",
+    "viewAttachment": "View {name}",
+    "removeAttachment": "Remove {name}"
+  },
+  "choice": {
+    "fallbackPrompt": "A few choices",
+    "suggested": "Suggested",
+    "skip": "Skip",
+    "continue": "Continue",
+    "confirmEdits": "Confirm edits",
+    "agentDecides": "Agent will decide",
+    "saved": "Saved",
+    "skipHint": "Skip any time to let the agent decide.",
+    "expandPrompt": "Expand prompt",
+    "expandQuestion": "Expand question",
+    "customPlaceholder": "Type your own",
+    "customLabel": "Custom answer: {question}",
+    "other": "Other",
+    "otherHint": "Type your own answer.",
+    "annotateSection": "Annotate image edits",
+    "chooseSource": "Choose source image"
+  },
+  "annotation": {
+    "addPoint": "Add point",
+    "movePoint": "Move point",
+    "pan": "Pan",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "fit": "Fit image",
+    "list": "Annotation points",
+    "empty": "Click the image to add numbered points, then describe each requested change.",
+    "point": "Point {number}",
+    "removePoint": "Remove point {number}",
+    "editLabel": "Edit for point {number}",
+    "placeholder": "Describe this edit; type {'@'} to add a reference image…",
+    "uploadReference": "Upload reference image",
+    "noAssets": "No matching project images",
+    "uploading": "Uploading…",
+    "tools": "Annotation tools",
+    "references": "Referenced images",
+    "removeReference": "Remove reference {name}",
+    "loadFailed": "Could not load this image. Choose the source again.",
+    "clickToAdd": "Click the image to add numbered points, then describe each change on the right",
+    "composerHint": "Attach the image to edit, then click it to mark changes",
+    "missingSource": "Upload a source image with this edit request first.",
+    "referenceLimit": "Use no more than 8 unique reference images across all points."
+  },
+  "sketch": {
+    "toolbar": "Sketch tools",
+    "pen": "Pen",
+    "text": "Text",
+    "inkColor": "Ink color",
+    "penWidth": "Pen width",
+    "thin": "Thin",
+    "medium": "Medium",
+    "thick": "Thick",
+    "undo": "Undo",
+    "redo": "Redo",
+    "clear": "Clear sketch",
+    "board": "Sketch drawing board",
+    "emptyTitle": "A few lines are all it takes",
+    "emptyDescription": "Draw your idea, or add text directly to the sketch.",
+    "textPlaceholder": "Add text…",
+    "drawHint": "Drag to draw · Works with touch and pen",
+    "textHint": "Click to place text · Enter to add it",
+    "blankError": "Draw a line or add text before saving.",
+    "exportError": "Could not export your sketch. Please try again.",
+    "attachmentName": "Sketch",
+    "reviewStep": "Review this step before continuing.",
+    "skipped": "Skipped",
+    "saved": "Saved",
+    "pending": "Pending",
+    "uploadImages": "Upload images",
+    "chooseProject": "Choose from project",
+    "uploading": "Uploading…",
+    "referencesLabel": "Additional reference images",
+    "removeImage": "Remove",
+    "noAssets": "No other project images yet.",
+    "adjustPlaceholder": "Add details or correct the understanding…",
+    "notesPlaceholder": "Add your instructions…",
+    "continue": "Continue",
+    "generate": "Generate image",
+    "inputLimit": "You can add up to {count} more images.",
+    "uploadFailed": "Upload failed. Try again."
+  },
+  "media": {
+    "closePreview": "Close preview",
+    "generatedImage": "Generated image",
+    "generatedVideo": "Generated video"
   },
   "workspace": {
     "conversation": "Conversation",

@@ -1,4 +1,4 @@
-import { isAgentTransientMessage } from './agentHistoryVisibility'
+import { isAgentTransientMessage } from './agentHistoryVisibility.ts'
 
 interface RecoveryCards {
   confirmation?: { id: string, jobs?: Array<{ id: string }> }

@@ -150,6 +150,10 @@ test('agent dispatcher executes export_zip and returns its link without a genera
     resolveZipExport: () => ({ items: [item('Bottle')], name: 'assets' }),
     exportSessionZip: async (_input) => { return { ok: true, url: 'https://storage.test/archive.zip' } },
     sessionWantsStop: () => false,
+    sketchBrief: () => null,
+    assertSketchQuestion: () => {},
+    assertAnnotationQuestion: () => {},
+    sessionStillUrls: () => [],
     appendToolResult: (_session, callId, result) => results.push({ callId, result: JSON.parse(result) }),
     queueGenerationWork: () => assert.fail('Export must not queue generation'),
   })

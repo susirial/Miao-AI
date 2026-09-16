@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isInternalAgentChatText, publicAgentChatText } from '~~/shared/utils/agentChatVisibility'
+import { normalizeAgentLocale } from '~~/shared/utils/agentLocale'
 import { allocateAssetName } from '~~/shared/utils/assetName'
 import { archiveAgentHistory } from '../utils/agentHistory'
 import { localDataPath } from '../utils/dataPaths.mjs'
@@ -45,6 +46,8 @@ export interface AgentSession {
   bffUrl?: string
   quality: AgentQuality
   confirmPolicy: AgentConfirmPolicy
+  /** Interface language of the client that sent the latest turn. */
+  locale?: string
   updatedAt: number
 }
 const sessions = new Map<string, AgentSession>()
@@ -195,10 +198,12 @@ function hydrateLoaded(loaded: AgentSession): AgentSession {
   loaded.updatedAt = Number(loaded.updatedAt) || Date.now()
   archiveTranscript(loaded)
   loaded.messages = trimTranscript(loaded.messages)
+  loaded.locale = normalizeAgentLocale(loaded.locale) || undefined
+  const prompt = sessionMediaPrompt(loaded.images, loaded.confirmPolicy, loaded.locale)
   if (loaded.messages[0]?.role === 'system')
-    loaded.messages[0] = { role: 'system', content: sessionMediaPrompt(loaded.images, loaded.confirmPolicy) }
+    loaded.messages[0] = { role: 'system', content: prompt }
   else
-    loaded.messages.unshift({ role: 'system', content: sessionMediaPrompt(loaded.images, loaded.confirmPolicy) })
+    loaded.messages.unshift({ role: 'system', content: prompt })
   if (dropStalePending(loaded) || repaired.removed)
     hydratedRepairs.add(loaded.id)
   return loaded
@@ -607,7 +612,7 @@ export function touch(session: AgentSession) {
   schedulePersist(session)
 }
 export function refreshSessionPrompt(session: AgentSession) {
-  const content = sessionMediaPrompt(session.images, session.confirmPolicy || 'always')
+  const content = sessionMediaPrompt(session.images, session.confirmPolicy || 'always', session.locale)
   if (session.messages[0]?.role === 'system')
     session.messages[0] = { role: 'system', content }
   else

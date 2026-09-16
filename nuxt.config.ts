@@ -1,3 +1,5 @@
+import { cpSync, mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import process from 'node:process'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -140,6 +142,13 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-03-13',
 
   nitro: {
+    hooks: {
+      compiled(nitro) {
+        const destination = resolve(nitro.options.output.serverDir, 'agent-skills')
+        mkdirSync(destination, { recursive: true })
+        cpSync(resolve(nitro.options.rootDir, 'server/agent/skills'), destination, { recursive: true })
+      },
+    },
     imports: {
       // Agent runtime is imported explicitly; avoid clashing with shared/* type names.
       exclude: [

@@ -25,7 +25,7 @@ export function dropStaleStopNotesForPendingChoice<T extends {
   imageIds?: unknown[]
   kind?: string
 }>(messages: T[]): T[] {
-  const next = messages.slice()
+  let next = messages
   while (next.length) {
     const last = next[next.length - 1]!
     if (
@@ -36,6 +36,8 @@ export function dropStaleStopNotesForPendingChoice<T extends {
       && !last.imageIds?.length
       && last.kind !== 'error'
     ) {
+      if (next === messages)
+        next = messages.slice()
       next.pop()
       continue
     }

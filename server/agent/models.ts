@@ -4,6 +4,7 @@ import type { AgentSession } from './session'
 import type { AgentEvent, AgentImage } from './types'
 import { AGENT_MODELS, agentModelInputSchema, findAgentModelTool, readModelMentions, validateAgentModelInput } from '~~/shared/utils/agentModels'
 import { canonicalMediaUrl } from '../utils/storedMediaUrl.mjs'
+import { annotationReferenceImages, confirmedAnnotationEdit } from './imageAnnotations'
 import { availableAgentModels, resolveAgentGenerationSpec } from './mediaModels'
 import { runQueuedAgentGeneration } from './queuedGeneration'
 
@@ -30,20 +31,52 @@ export function selectedModelIds(session: Pick<AgentSession, 'messages'>) {
   return []
 }
 export async function prepareModelGeneration(tool: string, json: string, session: AgentSession): Promise<ModelGeneration> {
-  const model = findAgentModelTool(tool)
-  if (!model)
+  const requestedModel = findAgentModelTool(tool)
+  if (!requestedModel)
     throw new Error('Unknown model')
+  if (!availableAgentModels().some(item => item.id === requestedModel.id))
+    throw new Error(`${requestedModel.name} is not available.`)
+  const annotation = confirmedAnnotationEdit(session)
+  const model = annotation && requestedModel.category === 'Image'
+    ? AGENT_MODELS.find(item => item.id === 'seedream/5-pro-reference-to-image')!
+    : requestedModel
   if (!availableAgentModels().some(item => item.id === model.id))
     throw new Error(`${model.name} is not available.`)
   const inputSchema = agentModelInputSchema(model)
   const selected = selectedModelIds(session)
-  const categorySelections = selected.filter(id => AGENT_MODELS.find(item => item.id === id)?.category === model.category)
-  if (categorySelections.length && !categorySelections.includes(model.id))
+  const categorySelections = selected.filter(id => AGENT_MODELS.find(item => item.id === id)?.category === requestedModel.category)
+  if (categorySelections.length && !categorySelections.includes(requestedModel.id))
     throw new Error(`The user selected ${categorySelections.join(', ')}. Use that exact model tool, or ask before changing models.`)
   const raw = JSON.parse(json)
   if (!raw || typeof raw !== 'object' || Array.isArray(raw))
     throw new Error('Model parameters must be an object')
-    // Session IDs and latest are resolved only for actual media fields.
+  if (annotation && requestedModel.category === 'Image') {
+    const additional = ['reference_images', 'input_urls', 'image_urls', 'image_input', 'images']
+      .flatMap(key => Array.isArray(raw[key]) ? raw[key] : raw[key] === undefined ? [] : [raw[key]])
+      .map((value) => {
+        if (typeof value !== 'string')
+          throw new Error('Annotation reference images must be valid media.')
+        const url = canonicalMediaUrl(value)
+        if (url)
+          return url
+        const media = value === 'latest'
+          ? session.images.find(image => image.status === 'success' && image.kind !== 'video' && image.url)
+          : session.images.find(image => image.id === value && image.status === 'success' && image.kind !== 'video' && image.url)
+        if (!media)
+          throw new Error('Missing annotation reference image. Select it from the project or session.')
+        return media.url
+      })
+    for (const key of ['reference_images', 'input_urls', 'image_urls', 'image_input', 'images']) {
+      if (!(key in inputSchema.properties))
+        delete raw[key]
+    }
+    const imageField = ['reference_images', 'input_urls', 'image_urls', 'image_input', 'images']
+      .find(key => key in inputSchema.properties)
+    if (!imageField)
+      throw new Error('Seedream reference-to-image cannot accept annotation references.')
+    raw[imageField] = annotationReferenceImages(annotation, additional)
+  }
+  // Session IDs and latest are resolved only for actual media fields.
   for (const [key, property] of Object.entries(inputSchema.properties) as [string, SchemaProperty][]) {
     if (!key.includes('url') && property['x-ui-component'] !== 'uploaders')
       continue

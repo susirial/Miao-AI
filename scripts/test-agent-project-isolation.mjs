@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
-import { computed, effectScope, isRef, ref, shallowRef, toValue, watch } from 'vue'
+import { computed, effectScope, isRef, ref, shallowRef, toValue, watch, watchEffect } from 'vue'
 
 const source = readFileSync(new URL('../app/composables/useAgentLab.ts', import.meta.url), 'utf8')
 const wrapper = source.slice(source.indexOf('const agentLabs ='), source.indexOf('\nfunction createAgentLab('))
@@ -11,6 +11,7 @@ const runtimes = []
 const unmounts = []
 const context = vm.createContext({
   useServiceConnection: () => ({ ensureConnected: async () => true }),
+  useI18n: () => ({ locale: ref('zh') }),
   exports: {},
   computed,
   effectScope,
@@ -19,6 +20,7 @@ const context = vm.createContext({
   shallowRef,
   toValue,
   watch,
+  watchEffect,
   onMounted: () => {},
   onUnmounted: fn => unmounts.push(fn),
   createAgentLab: ({ projectId }) => {

@@ -1,4 +1,5 @@
 import type { SEEDREAM_5_ASPECT_RATIOS, SEEDREAM_5_RESOLUTIONS } from '~~/shared/constants/aiModels'
+import type { ImageAnnotationEdit } from '~~/shared/utils/imageAnnotations'
 import { SEEDANCE_2_ASPECT_RATIOS, SEEDANCE_2_DURATIONS, SEEDANCE_2_RESOLUTIONS } from '~~/shared/utils/seedance2'
 
 export { SEEDANCE_2_ASPECT_RATIOS, SEEDANCE_2_DURATIONS, SEEDANCE_2_RESOLUTIONS }
@@ -144,6 +145,8 @@ export interface ChoicePayload {
 }
 
 export interface ChoiceAnswer {
+  annotationEdit?: ImageAnnotationEdit
+  referenceImages?: Array<{ url: string, name: string }>
   questionId: string
   optionId?: string
   label?: string

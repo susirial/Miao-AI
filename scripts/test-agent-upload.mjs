@@ -45,6 +45,7 @@ test('upload handler records the local media URL as the session attachment', asy
   const context = vm.createContext({
     exports: {},
     crypto: { randomUUID: () => 'image-id' },
+    cleanAssetName: value => String(value || '').trim(),
     resolveChatSession: async () => session,
     uploadAgentImage: h.upload,
     upsertImage: (target, image) => {
@@ -53,8 +54,11 @@ test('upload handler records the local media URL as the session attachment', asy
     },
   })
   vm.runInContext(ts.transpileModule(fn.getText(tree), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, context)
-  const response = await context.exports.handleUpload(session.id, { bytes: new Uint8Array([1]), fileName: 'original.png', mime: 'image/png' })
+  const response = await context.exports.handleUpload(session.id, { bytes: new Uint8Array([1]), fileName: 'original.png', mime: 'image/png' }, 'Sketch')
   assert.match(response.image.url, /^https:\/\/media\.example\.com\//)
   assert.equal(recorded.url, response.image.url)
   assert.equal(recorded.kind, 'upload')
+  assert.equal(recorded.prompt, 'Sketch', 'A client-supplied label names the attachment')
+  const unlabeled = await context.exports.handleUpload(session.id, { bytes: new Uint8Array([1]), fileName: 'original.png', mime: 'image/png' })
+  assert.equal(unlabeled.image.prompt, 'Uploaded still')
 })

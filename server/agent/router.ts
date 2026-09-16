@@ -59,6 +59,7 @@ function parseChoiceBody(body: Record<string, unknown>): ChoiceBody {
           return []
         return [{
           questionId,
+          annotationEdit: row.annotationEdit as import('~~/shared/utils/imageAnnotations').ImageAnnotationEdit | undefined,
           optionId: typeof row.optionId === 'string' ? row.optionId : undefined,
           text: typeof row.text === 'string' ? row.text : undefined,
           skipped: row.skipped === true,
@@ -175,7 +176,7 @@ export async function dispatchAgentRequest(input: {
     if (!input.file)
       throw new AgentHttpError('image file is required', 400)
     const requestedSession = String(input.query?.sessionId || '').trim()
-    const uploaded = await handleUpload(requestedSession || undefined, input.file)
+    const uploaded = await handleUpload(requestedSession || undefined, input.file, String(input.query?.name || '').trim())
     return { kind: 'json', status: 200, body: uploaded }
   }
   const stopMatch = path.match(/^\/v1\/sessions\/([^/]+)\/stop$/)
@@ -190,6 +191,8 @@ export async function dispatchAgentRequest(input: {
         projectId,
         history: body.history,
         images: body.images,
+        locale: body.locale,
+        annotationEdit: body.annotationEdit,
       }))
     })
     return { kind: 'sse', stream }

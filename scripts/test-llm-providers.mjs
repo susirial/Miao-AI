@@ -175,6 +175,50 @@ test('three official providers build isolated protocol bodies', async () => {
   assert.equal(JSON.parse(zaiComplete.init.body).reasoning_effort, 'low')
 })
 
+test('a required tool never ships alongside Z.ai thinking, and withheld tools drop the tool block', async () => {
+  const forced = await adapters.buildProviderRequest(snapshot('zai'), 'stream', {
+    messages,
+    tools,
+    requiredTool: 'paint',
+    onDelta() {},
+  })
+  const forcedBody = JSON.parse(forced.init.body)
+  assert.deepEqual(plain(forcedBody.tool_choice), { type: 'function', function: { name: 'paint' } })
+  assert.deepEqual(plain(forcedBody.thinking), { type: 'disabled' })
+
+  for (const provider of ['ark', 'deepseek', 'zai']) {
+    const disabled = await adapters.buildProviderRequest(snapshot(provider), 'stream', {
+      messages,
+      tools,
+      disableTools: true,
+      onDelta() {},
+    })
+    const disabledBody = JSON.parse(disabled.init.body)
+    assert.ok(!('tools' in disabledBody), `${provider} must not send tools`)
+    assert.ok(!('tool_choice' in disabledBody), `${provider} must not force a tool choice`)
+    assert.ok(!('parallel_tool_calls' in disabledBody))
+  }
+
+  const stillThinking = await adapters.buildProviderRequest(snapshot('zai'), 'stream', {
+    messages,
+    tools,
+    disableTools: true,
+    onDelta() {},
+  })
+  assert.deepEqual(plain(JSON.parse(stillThinking.init.body).thinking), { type: 'enabled' })
+})
+
+test('provider failures reach chat as readable text instead of a JSON envelope', () => {
+  const sse = loadPath(resolve(root, 'server/ai/llm/sse.ts'))
+  assert.equal(
+    sse.providerFailureMessage('{"error":{"message":"Thinking mode does not support this tool_choice","code":"invalid_request_error"}}', 'Z.ai', 400),
+    'Z.ai: Thinking mode does not support this tool_choice',
+  )
+  assert.equal(sse.providerFailureMessage('{"error":"quota exceeded"}', 'Ark', 429), 'Ark: quota exceeded')
+  assert.equal(sse.providerFailureMessage('{"detail":{}}', 'Ark', 500), 'Ark: {"detail":{}}')
+  assert.equal(sse.providerFailureMessage('  ', 'DeepSeek', 502), 'DeepSeek request failed (502).')
+})
+
 test('official vision providers inline local media and preserve remote URLs', async () => {
   for (const provider of ['ark', 'deepseek']) {
     const local = await adapters.buildProviderRequest(snapshot(provider), 'complete', {

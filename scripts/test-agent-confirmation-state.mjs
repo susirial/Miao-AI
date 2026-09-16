@@ -68,6 +68,8 @@ test('late pending snapshot cannot downgrade approval; detached jobs recover the
 
     unionSessionImages: (_, incoming) => incoming,
     withoutRemovedImages: images => images,
+    dropRemovedImageIdsFromMessages: messages => messages,
+    removedCanvasImageIds: new Set(),
     dropStaleStopNotesForPendingChoice: messages => messages,
     recoverAgentTranscript: (local, remote) => remote.length ? remote : local,
     reconcileConfirmationStates,
@@ -128,6 +130,8 @@ test('hydrate attaches ask_user to a think-only turn and drops a leftover stop n
     syncLabBusyFromImages: () => {},
     unionSessionImages: (_, incoming) => incoming,
     withoutRemovedImages: images => images,
+    dropRemovedImageIdsFromMessages: messages => messages,
+    removedCanvasImageIds: new Set(),
     dropStaleStopNotesForPendingChoice,
     recoverAgentTranscript: (local, remote, create) => {
       const merged = remote.map(create)

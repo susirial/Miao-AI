@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
+import process from 'node:process'
 import { test } from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
@@ -148,8 +149,18 @@ test('Ark response materializes URL and base64 results while retaining partial e
   assert.equal(saves[0][2], 'image/jpeg')
 })
 
-function arkBackend(overrides = {}) {
+function arkBackend(overrides = {}, undiciOverrides = {}) {
+  const { fetch: fetchOverride, ...globals } = overrides
   return load('server/ai/media/arkImage.ts', {
+    'undici': {
+      Agent: class ArkAgentStub {
+        constructor(options) {
+          Object.assign(this, options)
+        }
+      },
+      fetch: (...args) => (fetchOverride || fetch)(...args),
+      ...undiciOverrides,
+    },
     '../../utils/generationJobs': { generationProvider: job => job.provider },
     '../../utils/serviceSettings': { readServiceSettings: () => ({ arkKey: 'test-ark-key' }) },
     './arkImageInput': {
@@ -166,7 +177,7 @@ function arkBackend(overrides = {}) {
         results: data,
       }),
     },
-  }, overrides)
+  }, globals)
 }
 
 function arkJob() {
@@ -244,6 +255,31 @@ test('Ark image payload keeps multiple references as an image array', async () =
   assert.deepEqual(body.image, ['https://example.com/a.png', 'https://example.com/b.png'])
 })
 
+// A dispatcher from this undici build is unusable from Node's bundled fetch:
+// the request either throws or stalls, so keep this test bounded.
+test('Ark submission runs on the fetch that owns its timeout dispatcher', { timeout: 5_000 }, async () => {
+  const undici = require('undici')
+  const mockAgent = new undici.MockAgent()
+  mockAgent.disableNetConnect()
+  mockAgent
+    .get('https://ark.cn-beijing.volces.com')
+    .intercept({ path: '/api/v3/images/generations', method: 'POST' })
+    .reply(200, { data: [{ url: 'https://example.com/result.jpg' }] }, {
+      headers: { 'content-type': 'application/json' },
+    })
+  const ark = arkBackend({}, {
+    Agent: class ArkMockAgent {
+      constructor() {
+        return mockAgent
+      }
+    },
+    fetch: undici.fetch,
+  })
+  const result = await ark.arkImageBackend.start(arkJob())
+  assert.deepEqual(JSON.parse(JSON.stringify(result.resultUrls)), ['https://example.com/result.jpg'])
+  await mockAgent.close()
+})
+
 test('Ark backend handles provider errors and never retries an ambiguous submission', async () => {
   const topError = arkBackend({
     fetch: async () => new Response(JSON.stringify({ error: { message: 'blocked by policy' } }), { status: 400 }),
@@ -269,7 +305,8 @@ test('Ark backend handles provider errors and never retries an ambiguous submiss
 })
 
 test('dispatcher returns while a synchronous backend is in flight and deduplicates starts', async () => {
-  let claimed = false
+  let queueClaimed = false
+  let startClaimed = false
   let starts = 0
   let release
   const pending = new Promise((resolve) => { release = resolve })
@@ -301,11 +338,17 @@ test('dispatcher returns while a synchronous backend is in flight and deduplicat
     },
     '../models/generationJob': {
       GenerationJob: {
-        countDocuments: async () => claimed ? 1 : 0,
-        findOneAndUpdate: async () => {
-          if (claimed)
+        countDocuments: async () => queueClaimed ? 1 : 0,
+        findOneAndUpdate: async (filter) => {
+          if (filter.state === 'queued') {
+            if (queueClaimed)
+              return null
+            queueClaimed = true
+            return job
+          }
+          if (startClaimed)
             return null
-          claimed = true
+          startClaimed = true
           return job
         },
         findById: async () => job,

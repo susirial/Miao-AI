@@ -92,10 +92,10 @@ async function submitCreateProject() {
 onMounted(() => {
   void resolveTargetProjectId()
 })
-async function onSend() {
+async function onSend(options?: { sketchFile?: File, sketchName?: string, annotationEdit?: import('~~/shared/utils/imageAnnotations').ImageAnnotationEdit }) {
   await resolveTargetProjectId()
   await nextTick()
-  const sent = await sendMessage({ newAgent: props.newAgentOnSend })
+  const sent = await sendMessage({ ...options, newAgent: props.newAgentOnSend })
   if (sent)
     await enterSelectedProject()
 }

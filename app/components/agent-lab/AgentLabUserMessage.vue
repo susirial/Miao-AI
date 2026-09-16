@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AiModelConfig } from '~~/shared/types/aiModel'
 import { AGENT_MODELS, displayModelMentions } from '~~/shared/utils/agentModels'
+import { PUBLIC_AGENT_SKILLS } from '~~/shared/utils/agentSkills'
 import { toolAgentMessage } from '~/utils/toolAgentRequest'
 
 const props = defineProps<{ content: string }>()
@@ -8,12 +9,16 @@ const toolInput = computed(() => toolAgentMessage(props.content))
 const shownContent = computed(() => toolInput.value?.content ?? props.content)
 const { open } = useMediaLightbox()
 const parts = computed(() => {
-  const result: Array<{ text: string, model?: AiModelConfig }> = []
+  const result: Array<{ text: string, model?: AiModelConfig, skill?: typeof PUBLIC_AGENT_SKILLS[number] }> = []
   let cursor = 0
-  for (const match of shownContent.value.matchAll(/@\[[^\]]+\]\(model:([^\s)]+)\)/g)) {
+  for (const match of shownContent.value.matchAll(/@\[[^\]]+\]\(model:([^\s)]+)\)|(?<!\S)\/([a-z0-9-]+)(?=\s|$)/g)) {
     if (match.index > cursor)
       result.push({ text: shownContent.value.slice(cursor, match.index) })
-    result.push({ text: displayModelMentions(match[0]), model: AGENT_MODELS.find(model => model.id === match[1]) })
+    result.push({
+      text: displayModelMentions(match[0]),
+      model: AGENT_MODELS.find(model => model.id === match[1]),
+      skill: PUBLIC_AGENT_SKILLS.find(skill => skill.id === match[2]),
+    })
     cursor = match.index + match[0].length
   }
   if (cursor < shownContent.value.length)
@@ -25,7 +30,7 @@ const parts = computed(() => {
 <template>
   <p class="whitespace-pre-wrap break-words">
     <template v-for="(part, index) in parts" :key="index">
-      <AgentLabModelBadge v-if="part.model" :model="part.model" /><template v-else>
+      <AgentLabModelBadge v-if="part.model" :model="part.model" /><AgentLabSkillBadge v-else-if="part.skill" :skill="part.skill" /><template v-else>
         {{ part.text }}
       </template>
     </template>

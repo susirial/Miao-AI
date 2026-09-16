@@ -57,6 +57,7 @@ export async function buildProviderRequest(
     messages: await materializeMessages(options.messages, config.imageMaterialization, options.signal),
     stream: kind === 'stream',
   }
+  let forcedTool = false
 
   if (kind === 'complete') {
     const complete = options as CompleteTextOptions
@@ -68,27 +69,30 @@ export async function buildProviderRequest(
     body.temperature = 0.4
     const canUseTools = snapshot.capabilities.tools && stream.tools.length > 0
     if (canUseTools) {
-      body.tools = stream.tools
-      if (snapshot.capabilities.toolChoice) {
-        body.tool_choice = stream.disableTools
-          ? 'none'
-          : stream.requiredTool
-            ? { type: 'function', function: { name: stream.requiredTool } }
-            : 'auto'
-      }
-      else if (stream.disableTools) {
+      // Withholding the tools is supported everywhere; tool_choice "none" is not.
+      if (stream.disableTools) {
         delete body.tools
       }
-      else if (stream.requiredTool) {
-        throw new Error(`${config.name} does not support required tool choice.`)
+      else {
+        body.tools = stream.tools
+        if (snapshot.capabilities.toolChoice) {
+          body.tool_choice = stream.requiredTool
+            ? { type: 'function', function: { name: stream.requiredTool } }
+            : 'auto'
+        }
+        else if (stream.requiredTool) {
+          throw new Error(`${config.name} does not support required tool choice.`)
+        }
+        if (snapshot.capabilities.parallelToolCalls)
+          body.parallel_tool_calls = !stream.requiredTool
       }
-      if (body.tools && snapshot.capabilities.parallelToolCalls)
-        body.parallel_tool_calls = !stream.requiredTool
     }
+    forcedTool = Boolean(canUseTools && !stream.disableTools && stream.requiredTool)
   }
 
   if (snapshot.provider === 'zai') {
-    body.thinking = { type: 'enabled' }
+    // Z.ai rejects a forced tool_choice while thinking is enabled.
+    body.thinking = { type: forcedTool ? 'disabled' : 'enabled' }
     body.reasoning_effort = kind === 'stream' ? 'high' : 'low'
   }
 

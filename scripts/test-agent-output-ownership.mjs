@@ -44,6 +44,7 @@ test('catch-up is explicitly marked and updates assets without appending old thu
         persistCanvasResults: async () => { },
         confirmationMedia,
         reconcileConfirmationStates,
+        removedCanvasImageIds: new Set(),
     });
     const state = { messages: [{ role: 'assistant', content: 'Latest reply' }], images: [] };
     context.applyEventToState(emitted[0], state);
@@ -53,6 +54,9 @@ test('catch-up is explicitly marked and updates assets without appending old thu
     assert.deepEqual(Array.from(state.messages[0].imageIds), ['new']);
     context.applyEventToState({ type: 'image', image: { id: 'new', status: 'success' } }, state);
     assert.deepEqual(Array.from(state.messages[0].imageIds), ['new']);
+    context.removedCanvasImageIds.add('gone');
+    context.applyEventToState({ type: 'image', image: { id: 'gone', status: 'success', kind: 'upload' } }, state);
+    assert.equal(state.images.some(image => image.id === 'gone'), false);
 });
 test('legacy snapshots retain stable identities across loads without collapsing repeated user turns', async () => {
     const { createHash } = await import('node:crypto');
@@ -76,6 +80,7 @@ test('late SSE assets return to their owning card after another batch or final r
         persistCanvasResults: async () => { },
         confirmationMedia,
         reconcileConfirmationStates,
+        removedCanvasImageIds: new Set(),
     });
     const card = id => ({ id, role: 'assistant', content: '', confirmation: { id, jobs: [{ id: `${id}-job` }] }, confirmationState: 'confirmed' });
     const state = { messages: [card('first'), card('second'), { id: 'done', role: 'assistant', content: 'Done' }], images: [] };

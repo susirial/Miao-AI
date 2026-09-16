@@ -31,11 +31,35 @@ function payloadError(error: ChatCompletionChunk['error']) {
   return error.message || (error.code == null ? 'Provider returned an error.' : `Provider error (${error.code}).`)
 }
 
+const MAX_PROVIDER_DETAIL = 300
+
+/** Providers answer with JSON envelopes; chat should read the message, not the envelope. */
+export function providerFailureMessage(body: string, providerName: string, status: number) {
+  const text = body.trim()
+  if (text.startsWith('{') || text.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(text) as {
+        error?: string | { message?: string, code?: string | number }
+        message?: string
+      }
+      const detail = typeof parsed.error === 'string'
+        ? parsed.error
+        : parsed.error?.message || parsed.message
+      if (detail?.trim())
+        return `${providerName}: ${detail.trim().slice(0, MAX_PROVIDER_DETAIL)}`
+    }
+    catch {
+      // Fall through to the raw body below.
+    }
+  }
+  return text ? `${providerName}: ${text.slice(0, MAX_PROVIDER_DETAIL)}` : `${providerName} request failed (${status}).`
+}
+
 export async function assertChatResponse(response: Response, providerName: string) {
   if (response.ok)
     return
   const text = await response.text().catch(() => '')
-  throw new Error(text.trim() || `${providerName} request failed (${response.status}).`)
+  throw new Error(providerFailureMessage(text, providerName, response.status))
 }
 
 export async function consumeChatCompletionSse(options: {

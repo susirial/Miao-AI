@@ -1,5 +1,5 @@
 import type { MediaBackend, MediaJobDocument } from './types'
-import { Agent } from 'undici'
+import { Agent, fetch as undiciFetch } from 'undici'
 import { readErrorMessage } from '~~/shared/utils/apiError'
 import { generationProvider } from '../../utils/generationJobs'
 import { readServiceSettings } from '../../utils/serviceSettings'
@@ -10,6 +10,8 @@ export const ARK_IMAGE_PROTOCOL_VERSION = 'ark-images-sync-v1'
 export const ARK_IMAGE_ENDPOINT = 'https://ark.cn-beijing.volces.com/api/v3/images/generations'
 export const ARK_IMAGE_WAIT_MS = 10 * 60 * 1000
 
+// The dispatcher and the fetch implementation must come from the same undici
+// build: a dispatcher from this package cannot serve Node's bundled fetch.
 let imageDispatcher: Agent | undefined
 export function arkImageFetchDispatcher() {
   imageDispatcher ||= new Agent({
@@ -102,7 +104,9 @@ function responseError(payload: unknown, fallback: string) {
   return readErrorMessage(record.error || payload, fallback)
 }
 
-async function readArkResponse(response: Response, job: MediaJobDocument) {
+type ArkHttpResponse = Pick<Response, 'ok' | 'status'> & { text: () => Promise<string> }
+
+async function readArkResponse(response: ArkHttpResponse, job: MediaJobDocument) {
   let text: string
   try {
     text = await response.text()
@@ -151,9 +155,9 @@ export const arkImageBackend: MediaBackend = {
     job.lastSyncAt = new Date()
     await job.save()
 
-    let response: Response
+    let response: ArkHttpResponse
     try {
-      response = await fetch(ARK_IMAGE_ENDPOINT, {
+      response = await undiciFetch(ARK_IMAGE_ENDPOINT, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${key}`,
@@ -162,7 +166,7 @@ export const arkImageBackend: MediaBackend = {
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(ARK_IMAGE_WAIT_MS),
         dispatcher: arkImageFetchDispatcher(),
-      } as RequestInit)
+      })
     }
     catch (error) {
       await markSubmissionUnknown(job, error)

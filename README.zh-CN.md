@@ -45,6 +45,45 @@
 - **创作助手，不是聊天窗口。** 每个结果留在画布上，方便比较、复用和导出。
 - **开放，且在你的机器上。** Web 与 macOS 桌面；数据在本地 SQLite；没有喵 AI 云。
 
+## 更新记录
+
+### 2026-09-16 — 引导式创作 Skill
+
+项目页可以直接开始三条制作工作流。点击对应 Skill（或在 Agent 输入框输入 `/`），就会在当前项目里和你一起确认每一步。
+
+#### 标注修图 · `/image-annotation-edit`
+
+在原图上放置编号点，逐点写下要改什么，其余区域尽量保持不动。编辑器里用不同颜色区分各个点位。
+
+<p align="center">
+  <img src="docs/images/skills/annotation-marked.webp" alt="带编号点的原图" width="48%">
+  <img src="docs/images/skills/annotation-result.webp" alt="按标注修改后的成图" width="48%">
+</p>
+<p align="center">
+  <img src="docs/images/skills/annotation-editor.webp" alt="逐点填写修改说明的标注编辑器" width="280">
+</p>
+
+#### 草图生图 · `/sketch-to-image`
+
+在对话里的画板上画一个粗略构图。确认 Agent 对草图的理解后，由 Seedream 生成完整成图。
+
+<p align="center">
+  <img src="docs/images/skills/sketch-input.webp" alt="一家三口的草图" width="48%">
+  <img src="docs/images/skills/sketch-result.webp" alt="由草图生成的全家福" width="48%">
+</p>
+
+#### 营销图 · `/app-store-graphics`
+
+准备真实产品图或应用截图。Agent 先给出 9:16 设计方案（配色、字体、手机框）供你确认，再输出风格统一的营销图。
+
+<p align="center">
+  <img src="docs/images/skills/marketing-source.webp" alt="营销图用的产品原图" width="32%">
+  <img src="docs/images/skills/marketing-board.webp" alt="待确认的设计方案" width="32%">
+  <img src="docs/images/skills/marketing-result.webp" alt="最终 9:16 营销图" width="32%">
+</p>
+
+长视频创作（`/long-form-video`）仍可用于多分镜成片。
+
 ## 截图
 
 <p align="center">
@@ -156,7 +195,16 @@ flowchart LR
 
 ## 创作流程
 
-可以让 Agent 编辑图片或视频，或制作多分镜成片。长视频的典型路径：
+可以让 Agent 编辑图片或视频，或制作多分镜成片。当前公开 Skill：
+
+| Skill | 命令 | 你要做的 |
+| --- | --- | --- |
+| 标注修图 | `/image-annotation-edit` | 打点并逐项说明修改 |
+| 草图生图 | `/sketch-to-image` | 画构图，再确认理解 |
+| 营销图 | `/app-store-graphics` | 提供截图，确认设计方案 |
+| 长视频创作 | `/long-form-video` | 规划分镜、出片、拼接 |
+
+长视频的典型路径：
 
 1. 根据需求规划分镜。
 2. 确定角色参考（也可上传自己的形象）。

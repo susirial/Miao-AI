@@ -2,9 +2,11 @@
 import type { GenerationProjectPublic } from '~~/shared/types/project'
 import { toast } from 'vue-sonner'
 import { nextProjectTitle, PROJECT_DESCRIPTION_MAX, PROJECT_NAME_MAX } from '~~/shared/types/project'
+import { PUBLIC_AGENT_SKILLS } from '~~/shared/utils/agentSkills'
 import { readErrorMessage } from '~~/shared/utils/apiError'
 import ProjectCard from '@/components/projects/ProjectCard.vue'
 import ProjectDeleteDialog from '@/components/projects/ProjectDeleteDialog.vue'
+import SkillWorkflowCard from '@/components/projects/SkillWorkflowCard.vue'
 
 const POLL_MS = 3000
 const { public: publicConfig } = useRuntimeConfig()
@@ -25,6 +27,7 @@ const createOpen = ref(false)
 const creating = ref(false)
 const createName = ref('')
 const createDescription = ref('')
+const pendingSkillId = ref('')
 const createNameInputRef = ref<{
   $el?: HTMLInputElement
 } | null>(null)
@@ -49,7 +52,8 @@ useIntervalFn(() => {
     return
   void loadProjects()
 }, POLL_MS)
-function openCreate() {
+function openCreate(skillId: string | Event = '') {
+  pendingSkillId.value = typeof skillId === 'string' ? skillId : ''
   createName.value = nextProjectTitle(projects.value.map(project => project.name))
   createDescription.value = ''
   createOpen.value = true
@@ -86,7 +90,10 @@ async function submitCreate() {
     projects.value = [project, ...projects.value.filter(item => item.id !== project.id)]
     selectedProjectId.value = project.id
     createOpen.value = false
-    await navigateTo(localePath(`/projects/${project.id}`))
+    await navigateTo({
+      path: localePath(`/projects/${project.id}`),
+      query: pendingSkillId.value ? { agentSkill: pendingSkillId.value } : undefined,
+    })
   }
   catch (error) {
     toast.error(readErrorMessage(error, 'Could not create the project'))
@@ -94,6 +101,17 @@ async function submitCreate() {
   finally {
     creating.value = false
   }
+}
+async function openSkill(skillId: string) {
+  const current = projects.value.find(project => project.id === selectedProjectId.value) || sortedProjects.value[0]
+  if (!current) {
+    openCreate(skillId)
+    return
+  }
+  await navigateTo({
+    path: localePath(`/projects/${current.id}`),
+    query: { agentSkill: skillId },
+  })
 }
 async function submitEdit() {
   if (editing.value || !editingProject.value)
@@ -152,6 +170,25 @@ async function confirmDelete() {
         <p class="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
           {{ t('projects.workspaceDescription') }}
         </p>
+      </div>
+    </section>
+
+    <section class="flex flex-col gap-4" aria-labelledby="skills-heading">
+      <div>
+        <h2 id="skills-heading" class="text-xl font-normal tracking-[-0.025em]">
+          {{ t('skills.title') }}
+        </h2>
+        <p class="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+          {{ t('skills.projectDescription') }}
+        </p>
+      </div>
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <SkillWorkflowCard
+          v-for="skill in PUBLIC_AGENT_SKILLS"
+          :key="skill.id"
+          :skill="skill"
+          @click="openSkill(skill.id)"
+        />
       </div>
     </section>
 

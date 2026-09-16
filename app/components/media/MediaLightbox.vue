@@ -2,8 +2,10 @@
 import { X } from 'lucide-vue-next'
 
 const { item, close } = useMediaLightbox()
+const route = useRoute()
+const { t } = useI18n()
 const isVideo = computed(() => item.value?.kind === 'video')
-const label = computed(() => item.value?.alt || (isVideo.value ? 'Generated video' : 'Generated image'))
+const label = computed(() => item.value?.alt || t(isVideo.value ? 'media.generatedVideo' : 'media.generatedImage'))
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key !== 'Escape' || !item.value)
@@ -22,6 +24,7 @@ watch(item, (value) => {
   else
     window.removeEventListener('keydown', onKeydown, true)
 }, { immediate: true })
+watch(() => route.fullPath, close)
 
 onUnmounted(() => {
   if (!import.meta.client)
@@ -44,7 +47,7 @@ onUnmounted(() => {
       <button
         type="button"
         class="absolute top-3 right-3 z-10 flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label="Close preview"
+        :aria-label="t('media.closePreview')"
         @click="close"
       >
         <X class="size-4" />

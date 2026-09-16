@@ -28,15 +28,13 @@ const label = computed(() => {
 function openPreview() {
   if (!ready.value)
     return
-  if (navigateToMedia) {
-    void navigateToMedia(props.image.url)
-    return
-  }
   open({
     url: props.image.url,
     kind: isVideo.value ? 'video' : 'image',
     alt: label.value,
   })
+  if (navigateToMedia)
+    void navigateToMedia(props.image.url)
 }
 </script>
 

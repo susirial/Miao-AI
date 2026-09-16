@@ -8,6 +8,7 @@ import { FetchError } from 'ofetch'
 import { toast } from 'vue-sonner'
 import { isGenerationActive } from '~~/shared/types/generation'
 import { PROJECT_NAME_MAX } from '~~/shared/types/project'
+import { PUBLIC_AGENT_SKILLS } from '~~/shared/utils/agentSkills'
 import { readErrorMessage } from '~~/shared/utils/apiError'
 import ProjectMoveJobDialog from '@/components/projects/ProjectMoveJobDialog.vue'
 import { canvasMediaNavigationKey } from '~/composables/useCanvasMediaNavigation'
@@ -29,9 +30,11 @@ const { t } = useI18n()
 const localePath = useLocalePath()
 const { projects, selectedProjectId, loaded, loadFailed, loadProjects, isRemovedProject, markProjectRemoved, leaveRemovedProject } = useProjects()
 const route = useRoute()
+const router = useRouter()
 const nuxtApp = useNuxtApp()
 const projectId = computed(() => String(route.params.id || ''))
-const { sessionId: agentSessionId, messages, images, status, waitingForUserConfirm, waitingForUserChoice, pending: agentPending, draft, attachments, attaching, error: agentError, sendMessage, stopAgent, stopping, attachFiles, attachUrls, removeAttachment, removeCanvasImages, removeCanvasResult, resolveConfirmation, resolveChoice, qualityPreference, confirmPolicy, agents, activeAgentId, canCreateAgent, canSwitchAgent, createAgent, selectAgent, queueNotice, applyCanvasJobs } = useAgentLab({
+const agentChat = ref<{ mentionSkill: (skillId: string) => Promise<void> } | null>(null)
+const { sessionId: agentSessionId, messages, images, allImages, status, waitingForUserConfirm, waitingForUserChoice, pending: agentPending, draft, attachments, attaching, error: agentError, sendMessage, stopAgent, stopping, attachFiles, uploadAnnotationImage, attachUrls, removeAttachment, removeCanvasImages, removeCanvasResult, sessionIdsForImages, resolveConfirmation, resolveChoice, qualityPreference, confirmPolicy, agents, activeAgentId, canCreateAgent, canSwitchAgent, createAgent, selectAgent, queueNotice, applyCanvasJobs, ensureHydrated } = useAgentLab({
   projectId,
   onJobs(jobs) {
     for (const job of jobs)
@@ -199,12 +202,43 @@ function imageIdsForTarget(target: CanvasDeleteTarget) {
   const urls = new Set(target.taskId
     ? items.value.find(job => job.taskId === target.taskId)?.resultUrls || []
     : [])
-  return images.value
-    .filter(image => image.id === target.imageId
+  const seen = new Set<string>()
+  const ids: string[] = []
+  for (const image of [...images.value, ...allImages.value]) {
+    const id = String(image.id || '').trim()
+    if (!id || seen.has(id))
+      continue
+    if (image.id === target.imageId
       || (target.taskId && `agent_${image.id}`.slice(0, 120) === target.taskId)
       || (target.taskId && image.providerTaskId === target.taskId)
-      || (image.url && urls.has(image.url)))
-    .map(image => image.id)
+      || (image.url && urls.has(image.url))) {
+      seen.add(id)
+      ids.push(id)
+    }
+  }
+  if (target.imageId && !seen.has(target.imageId))
+    ids.push(target.imageId)
+  return ids
+}
+async function deleteSessionImages(imageIds: string[]) {
+  const sessions = new Set([
+    ...sessionIdsForImages(imageIds),
+    ...(agentSessionId.value ? [agentSessionId.value] : []),
+  ])
+  for (const imageId of imageIds) {
+    for (const sessionId of sessions) {
+      try {
+        await $fetch(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/images/${encodeURIComponent(imageId)}`, {
+          method: 'DELETE',
+          query: { allowGenerating: '1' },
+        })
+      }
+      catch (error) {
+        if (!(error instanceof FetchError) || (error.statusCode !== 404 && error.statusCode !== 409))
+          throw error
+      }
+    }
+  }
 }
 async function deleteCanvasResult(target: CanvasDeleteTarget) {
   if (target.taskId) {
@@ -216,19 +250,9 @@ async function deleteCanvasResult(target: CanvasDeleteTarget) {
         throw error
     }
   }
-  if (target.imageId && agentSessionId.value) {
-    try {
-      await $fetch(`/api/agent/v1/sessions/${encodeURIComponent(agentSessionId.value)}/images/${encodeURIComponent(target.imageId)}`, {
-        method: 'DELETE',
-        query: { allowGenerating: '1' },
-      })
-    }
-    catch (error) {
-      if (!(error instanceof FetchError) || (error.statusCode !== 404 && error.statusCode !== 409))
-        throw error
-    }
-  }
   const imageIds = imageIdsForTarget(target)
+  if (imageIds.length)
+    await deleteSessionImages(imageIds)
   if (imageIds.length)
     await removeCanvasImages(imageIds)
   else if (target.taskId)
@@ -401,6 +425,7 @@ async function saveRename() {
 onMounted(() => {
   void loadProject()
   void loadJobs()
+  void consumeAgentSkill()
 })
 onBeforeUnmount(() => {
   loadToken++
@@ -413,6 +438,32 @@ watch(projectId, () => {
   void loadProject()
   void loadJobs()
 })
+let consumedAgentSkill = ''
+let consumingAgentSkill = false
+async function consumeAgentSkill() {
+  const skillId = typeof route.query.agentSkill === 'string' ? route.query.agentSkill : ''
+  if (consumingAgentSkill || !skillId || consumedAgentSkill === skillId || !PUBLIC_AGENT_SKILLS.some(skill => skill.id === skillId) || !agentChat.value)
+    return
+  consumingAgentSkill = true
+  try {
+    await ensureHydrated()
+    if (!canCreateAgent.value || typeof route.query.agentSkill !== 'string')
+      return
+    consumedAgentSkill = skillId
+    createAgent()
+    await nextTick()
+    await agentChat.value.mentionSkill(skillId)
+    const query = { ...route.query }
+    delete query.agentSkill
+    await router.replace({ query })
+  }
+  finally {
+    consumingAgentSkill = false
+  }
+}
+watch([canCreateAgent, () => route.query.agentSkill, agentChat], () => {
+  void consumeAgentSkill()
+}, { flush: 'post' })
 watch(() => isRemovedProject(projectId.value), (removed) => {
   if (removed)
     void leaveRemovedProject(projectId.value)
@@ -533,7 +584,7 @@ function onAttachCanvas(payload: {
             :key="projectId"
             :project-id="projectId"
             :jobs="items"
-            :images="images"
+            :images="allImages"
             :loading="loading"
             :deleting-result-key="deletingResultKey"
             :show-move="otherProjects.length > 0"
@@ -549,13 +600,14 @@ function onAttachCanvas(payload: {
 
       <template #right>
         <AgentLabChat
+          ref="agentChat"
           v-model:draft="draft"
           v-model:quality-preference="qualityPreference"
           v-model:confirm-policy="confirmPolicy"
           class="h-full"
           :messages="messages"
           :session-id="agentSessionId"
-          :images="images"
+          :images="allImages"
           :project-jobs="items"
           :attachments="attachments"
           :status="status"
@@ -570,6 +622,7 @@ function onAttachCanvas(payload: {
           :active-agent-id="activeAgentId"
           :can-create-agent="canCreateAgent"
           :can-switch-agent="canSwitchAgent"
+          :upload-annotation-image="uploadAnnotationImage"
           @send="sendMessage"
           @stop="stopAgent"
           @attach="attachFiles"

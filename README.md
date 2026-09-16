@@ -45,6 +45,45 @@ Bring your own keys. There is no Miao account or cloud workspace. Projects, chat
 - **A creative assistant, not a chatbot.** Every result stays on the canvas so you can compare, reuse, and export.
 - **Open by default.** Web and macOS desktop; SQLite on your machine; no Miao cloud.
 
+## What's new
+
+### 16 September 2026 — Guided skills
+
+Three production workflows now start from the **Projects** page. Click a skill (or type `/` in the agent composer) and Miao walks the edit with you in the current project.
+
+#### Annotated image edit · `/image-annotation-edit`
+
+Drop numbered pins on the exact pixels that should change, write one instruction per pin, and keep everything else. Marker colors distinguish points in the editor.
+
+<p align="center">
+  <img src="docs/images/skills/annotation-marked.webp" alt="Source photo with numbered edit pins" width="48%">
+  <img src="docs/images/skills/annotation-result.webp" alt="Edited photo after applying pin instructions" width="48%">
+</p>
+<p align="center">
+  <img src="docs/images/skills/annotation-editor.webp" alt="Annotation editor with per-point notes" width="280">
+</p>
+
+#### Sketch to image · `/sketch-to-image`
+
+Draw a rough composition on the inline canvas. After you confirm the agent's reading of the sketch, Seedream turns it into a finished still.
+
+<p align="center">
+  <img src="docs/images/skills/sketch-input.webp" alt="Rough family-of-three sketch" width="48%">
+  <img src="docs/images/skills/sketch-result.webp" alt="Generated family portrait from the sketch" width="48%">
+</p>
+
+#### Marketing graphics · `/app-store-graphics`
+
+Start from real product or app screenshots. The agent proposes a 9:16 design board (palette, type, phone framing) for you to confirm, then produces the final creatives.
+
+<p align="center">
+  <img src="docs/images/skills/marketing-source.webp" alt="Source product photo for marketing graphics" width="32%">
+  <img src="docs/images/skills/marketing-board.webp" alt="Design board for confirmation" width="32%">
+  <img src="docs/images/skills/marketing-result.webp" alt="Finished 9:16 marketing graphic" width="32%">
+</p>
+
+Long-form video (`/long-form-video`) remains available for multi-shot films.
+
 ## Screenshots
 
 <p align="center">
@@ -156,7 +195,16 @@ There is no hosted demo. The workspace routes are unauthenticated by design — 
 
 ## Creative workflows
 
-Ask the agent to edit an image or video, or to produce a multi-shot piece. A typical long-form video pass:
+Ask the agent to edit an image or video, or to produce a multi-shot piece. Public skills:
+
+| Skill | Command | What you do |
+| --- | --- | --- |
+| Annotated image edit | `/image-annotation-edit` | Pin locations and describe each change |
+| Sketch to image | `/sketch-to-image` | Draw a composition, then confirm |
+| Marketing graphics | `/app-store-graphics` | Supply screenshots, confirm a design board |
+| Long-form video | `/long-form-video` | Plan shots, generate clips, stitch |
+
+A typical long-form video pass:
 
 1. Plan the storyboard from your brief.
 2. Establish character references (or upload your own).

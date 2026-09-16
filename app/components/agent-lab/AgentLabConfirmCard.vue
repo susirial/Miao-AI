@@ -36,6 +36,22 @@ function visibleModelInput(params: ConfirmationPayload['params']) {
   }
   return Object.fromEntries(Object.entries(input).filter(([key]) => !key.startsWith('_') && (key !== 'prompt' || showPrompt(params))))
 }
+const expandedParamKeys = ref<Record<string, boolean>>({})
+const summaryPromptExpanded = ref(false)
+function paramValueText(value: unknown) {
+  return typeof value === 'object' ? JSON.stringify(value) : String(value ?? '')
+}
+function paramNeedsClamp(value: unknown) {
+  const text = paramValueText(value)
+  return text.length > 120 || text.split('\n').length > 3
+}
+function isParamExpanded(jobId: string, key: string) {
+  return Boolean(expandedParamKeys.value[`${jobId}:${key}`])
+}
+function toggleParamExpand(jobId: string, key: string) {
+  const id = `${jobId}:${key}`
+  expandedParamKeys.value = { ...expandedParamKeys.value, [id]: !expandedParamKeys.value[id] }
+}
 
 const prompt = ref('')
 const aspectRatio = ref('1:1')
@@ -45,6 +61,8 @@ const duration = ref(5)
 watch(
   () => props.confirmation,
   (value) => {
+    expandedParamKeys.value = {}
+    summaryPromptExpanded.value = false
     const video = value.kind === 'video'
     const imageToVideo = value.params.videoMode === 'image'
     prompt.value = value.params.prompt
@@ -313,8 +331,20 @@ function emitConfirm() {
                 <dt class="text-muted-foreground">
                   {{ String(key).replaceAll('_', ' ') }}
                 </dt>
-                <dd class="min-w-0 whitespace-pre-wrap break-all">
-                  {{ typeof value === 'object' ? JSON.stringify(value) : String(value) }}
+                <dd class="flex min-w-0 items-start gap-1">
+                  <span class="min-w-0 flex-1 whitespace-pre-wrap break-all" :class="!isParamExpanded(job.id, String(key)) && paramNeedsClamp(value) ? 'line-clamp-3' : ''">
+                    {{ paramValueText(value) }}
+                  </span>
+                  <button
+                    v-if="paramNeedsClamp(value)"
+                    type="button"
+                    class="inline-flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    :aria-expanded="isParamExpanded(job.id, String(key))"
+                    :aria-label="`${isParamExpanded(job.id, String(key)) ? 'Collapse' : 'Expand'} ${String(key)}`"
+                    @click.stop.prevent="toggleParamExpand(job.id, String(key))"
+                  >
+                    <Icon name="lucide:chevron-down" class="size-3.5 transition-transform" :class="isParamExpanded(job.id, String(key)) ? 'rotate-180' : ''" />
+                  </button>
                 </dd>
               </template>
             </dl>
@@ -564,9 +594,14 @@ function emitConfirm() {
           </div>
         </div>
       </div>
-      <p v-if="showPrompt(shownParams) && shownParams.prompt" class="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-foreground" :class="readOnly ? '' : 'line-clamp-3'">
-        {{ shownParams.prompt }}
-      </p>
+      <div v-if="showPrompt(shownParams) && shownParams.prompt" class="mt-2 flex items-start gap-1">
+        <p class="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-6 text-foreground" :class="!summaryPromptExpanded && !readOnly ? 'line-clamp-3' : ''">
+          {{ shownParams.prompt }}
+        </p>
+        <button v-if="!readOnly && paramNeedsClamp(shownParams.prompt)" type="button" class="inline-flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" :aria-expanded="summaryPromptExpanded" aria-label="Expand prompt" @click="summaryPromptExpanded = !summaryPromptExpanded">
+          <Icon name="lucide:chevron-down" class="size-3.5 transition-transform" :class="summaryPromptExpanded ? 'rotate-180' : ''" />
+        </button>
+      </div>
       <p v-if="paramSummary" class="mt-2 text-xs text-muted-foreground">
         {{ paramSummary }}
       </p>

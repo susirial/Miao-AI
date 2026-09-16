@@ -101,6 +101,9 @@ test('completed snapshot restores chat, concat thumbnail, stale choices, and idl
         waitingForUser: computed(() => Boolean(choice.value || (confirmation.value && confirmation.value.approvedBy !== 'agent'))),
         shouldAutoApprove: card => card?.approvedBy === 'agent',
         unionSessionImages: (_local, remote) => remote,
+        withoutRemovedImages: items => items,
+        dropRemovedImageIdsFromMessages: messages => messages,
+        removedCanvasImageIds: new Set(),
         syncLabBusyFromImages: () => { },
         fetch: async () => ({ ok: true, json: async () => ({
                 busy: false,
@@ -179,6 +182,8 @@ test('hydrate attaches ask_user to a think-only turn and drops a leftover stop n
         waitingForUser: computed(() => Boolean(choice.value || (confirmation.value && confirmation.value.approvedBy !== 'agent'))),
         shouldAutoApprove: () => false,
         unionSessionImages: (_local, remote) => remote,
+        dropRemovedImageIdsFromMessages: messages => messages,
+        removedCanvasImageIds: new Set(),
         syncLabBusyFromImages: () => { },
         fetch: async () => ({ ok: true, json: async () => ({
             busy: false,

@@ -96,7 +96,25 @@ function launchProviderStart(job: GenerationJobDocument) {
     return
   const worker = Promise.resolve()
     .then(async () => {
-      await startProviderTask(job)
+      // A Nuxt HMR rebuild can briefly leave multiple module instances alive,
+      // each with its own `starting` map. Claim the start in SQLite as well so
+      // only one instance can submit the paid provider request.
+      const claimed = await GenerationJob.findOneAndUpdate({
+        _id: job._id,
+        deleted: { $ne: true },
+        providerTaskId: '',
+        state: { $in: ['waiting', 'queuing'] },
+      }, {
+        $set: {
+          state: 'generating',
+          lastSyncAt: new Date(),
+        },
+      }, {
+        new: true,
+      })
+      if (!claimed || isProviderStarted(claimed))
+        return
+      await startProviderTask(claimed)
     })
     .catch(async (error) => {
       console.error('[generation queue start]', job.taskId, error)
@@ -168,7 +186,7 @@ export async function startPendingProviderJob(job: GenerationJobDocument) {
     await dispatchQueuedJobs()
     return (await GenerationJob.findById(job._id)) || job
   }
-  if ((job.state === 'waiting' || job.state === 'queuing' || job.state === 'generating') && !isProviderStarted(job)) {
+  if ((job.state === 'waiting' || job.state === 'queuing') && !isProviderStarted(job)) {
     launchProviderStart(job)
     return (await GenerationJob.findById(job._id)) || job
   }

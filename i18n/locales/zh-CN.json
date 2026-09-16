@@ -150,6 +150,33 @@
     "createAnotherFirst": "请先创建另一个项目。",
     "move": "移动"
   },
+  "skills": {
+    "eyebrow": "创作工作流",
+    "title": "Skills",
+    "projectDescription": "从引导式工作流开始，在当前项目中和 Agent 一起确认并完善每个创作决定。",
+    "choose": "选择 Skill",
+    "empty": "没有匹配的 Skill",
+    "keyboardHelp": "↑ ↓ 移动 · Enter 选择 · Esc 关闭",
+    "remove": "移除 {name} Skill",
+    "items": {
+      "image-annotation-edit": {
+        "name": "标注修图",
+        "description": "在准确位置放置编号点，并逐项说明图片修改。"
+      },
+      "sketch-to-image": {
+        "name": "草图生图",
+        "description": "绘制粗略构图，再发展成完整成图。"
+      },
+      "app-store-graphics": {
+        "name": "App Store 营销图",
+        "description": "把真实应用截图转为风格一致的营销图片组。"
+      },
+      "long-form-video": {
+        "name": "长视频创作",
+        "description": "规划、确认并制作多镜头完整短片。"
+      }
+    }
+  },
   "chat": {
     "newAgent": "新建",
     "switchAgent": "切换 Agent",
@@ -186,11 +213,102 @@
     "reviewDescription": "仅在 Agent 判断需要检查时请求确认。",
     "alwaysReviewDescription": "每次生成都需要确认。",
     "shiftEnter": "按 Shift Enter 发送",
-    "composerPlaceholder": "输入 {mention} 选择模型，或分享你的想法，我会帮你规划。",
+    "enterSend": "按 Enter 发送，Shift Enter 换行",
+    "dropImages": "拖放图片以添加",
+    "dropImagesDescription": "支持 JPEG、PNG、WEBP 或 GIF，每张不超过 10 MB",
+    "composerPlaceholder": "输入 {mention} 选择模型、素材或 Skill，或直接分享想法，我会帮你规划。",
     "composerNext": "接下来想创作什么？",
     "copyInstruction": "复制指令",
     "copiedInstruction": "已复制",
-    "copyInstructionFailed": "复制失败"
+    "copyInstructionFailed": "复制失败",
+    "viewAttachment": "查看 {name}",
+    "removeAttachment": "移除 {name}"
+  },
+  "choice": {
+    "fallbackPrompt": "需要你做几个选择",
+    "suggested": "推荐",
+    "skip": "跳过",
+    "continue": "继续",
+    "confirmEdits": "确认修改",
+    "agentDecides": "由 Agent 决定",
+    "saved": "已保存",
+    "skipHint": "随时可以跳过，交给 Agent 决定。",
+    "expandPrompt": "展开说明",
+    "expandQuestion": "展开问题",
+    "customPlaceholder": "输入你的答案",
+    "customLabel": "自定义答案：{question}",
+    "other": "其他",
+    "otherHint": "输入你自己的答案。",
+    "annotateSection": "标注需要修改的位置",
+    "chooseSource": "选择源图"
+  },
+  "annotation": {
+    "addPoint": "添加点位",
+    "movePoint": "移动点位",
+    "pan": "平移",
+    "zoomOut": "缩小",
+    "zoomIn": "放大",
+    "fit": "适合画布",
+    "list": "标注点",
+    "empty": "点击图片添加编号点，再逐项说明需要修改的内容。",
+    "point": "点位 {number}",
+    "removePoint": "删除点位 {number}",
+    "editLabel": "点位 {number} 的修改",
+    "placeholder": "描述这个点的修改；输入 {'@'} 可添加参考图…",
+    "uploadReference": "上传参考图片",
+    "noAssets": "没有匹配的项目图片",
+    "uploading": "上传中…",
+    "tools": "标注工具",
+    "references": "已引用的图片",
+    "removeReference": "移除参考图 {name}",
+    "loadFailed": "无法加载这张图片，请重新选择源图。",
+    "clickToAdd": "点击图片添加编号点，然后在右侧写下要改的内容",
+    "composerHint": "先添加要修改的图片，再点击画面标注",
+    "missingSource": "请先随本次编辑请求上传待修改的源图。",
+    "referenceLimit": "所有点位合计最多使用 8 张不重复的参考图。"
+  },
+  "sketch": {
+    "toolbar": "草图工具",
+    "pen": "画笔",
+    "text": "文字",
+    "inkColor": "画笔颜色",
+    "penWidth": "画笔粗细",
+    "thin": "细",
+    "medium": "中",
+    "thick": "粗",
+    "undo": "撤销",
+    "redo": "重做",
+    "clear": "清空草图",
+    "board": "草图画布",
+    "emptyTitle": "几笔就能开始",
+    "emptyDescription": "画出你的想法，也可以直接在草图中添加文字。",
+    "textPlaceholder": "添加文字…",
+    "drawHint": "拖动绘画 · 支持触摸与手写笔",
+    "textHint": "点击放置文字 · Enter 添加",
+    "blankError": "保存前请先画一笔或添加文字。",
+    "exportError": "无法导出草图，请重试。",
+    "attachmentName": "草图",
+    "reviewStep": "继续前请确认此步骤。",
+    "skipped": "已跳过",
+    "saved": "已保存",
+    "pending": "待确认",
+    "uploadImages": "上传图片",
+    "chooseProject": "从项目选择",
+    "uploading": "上传中…",
+    "referencesLabel": "附加参考图",
+    "removeImage": "移除",
+    "noAssets": "项目中还没有其他图片。",
+    "adjustPlaceholder": "补充细节或修正 Agent 的理解…",
+    "notesPlaceholder": "添加你的说明…",
+    "continue": "继续",
+    "generate": "生成图片",
+    "inputLimit": "还可添加最多 {count} 张图片。",
+    "uploadFailed": "上传失败，请重试。"
+  },
+  "media": {
+    "closePreview": "关闭预览",
+    "generatedImage": "生成的图片",
+    "generatedVideo": "生成的视频"
   },
   "workspace": {
     "conversation": "对话",
