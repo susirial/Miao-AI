@@ -81,6 +81,22 @@ export function recoverableToolResultImages(messages: ChatMessage[], images: Age
   })
 }
 
+/**
+ * Wait for every job, then append results in the original call order.
+ * Callers must inspect or push any user message only after this returns.
+ */
+export async function runJobsThenAppendToolResults<T extends { toolCallId: string }>(
+  jobs: T[],
+  runJob: (job: T) => Promise<string>,
+  appendResult: (toolCallId: string, result: string) => void,
+) {
+  const results = await Promise.all(jobs.map(job => runJob(job)))
+  jobs.forEach((job, index) => {
+    appendResult(job.toolCallId, results[index] || JSON.stringify({ ok: false, error: 'Empty tool result' }))
+  })
+  return results
+}
+
 /** Validate the OpenAI-compatible assistant/tool message protocol. */
 export function assertValidToolTranscript(messages: ChatMessage[]) {
   let pending: Set<string> | null = null

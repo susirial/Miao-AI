@@ -33,7 +33,7 @@ import { assertSketchQuestion, sketchBrief, sketchGenerationSubmitted, validateS
 import { summarizeSessionTitle } from './title'
 import { readServiceSettings, rememberMediaFamilies } from '../utils/serviceSettings'
 import { ASK_USER_TOOL, capabilityRequeueFallback, CONCAT_VIDEO_TOOL, GENERATE_IMAGE_TOOL, GENERATE_VIDEO_TOOL, parseAskUserArgs, parseConcatVideoArgs, parseGenerateImageArgs, parseGenerateVideoArgs, requiredToolIfListed, resolveConcatVideoUrls, resolveGenerateImageArgs, resolveGenerateVideoArgs, selectAgentLoopTools } from './tools'
-import { recoverableToolResultImages, removeOrphanToolMessages } from './toolTranscript'
+import { recoverableToolResultImages, removeOrphanToolMessages, runJobsThenAppendToolResults } from './toolTranscript'
 import { uploadAgentImage } from './upload'
 
 type Emit = (event: AgentEvent) => void
@@ -1617,12 +1617,21 @@ async function runConfirmedItems(
     }
   }
   await Promise.all([
-    ...models.map(async (job) => {
-      const result = await runModelGeneration(session, job.toolCallId, job.args, emit, signal)
-      appendToolResult(sessionId, job.toolCallId, result)
-      if (AGENT_MODELS.find(model => model.id === job.args.modelId)?.category === 'Image')
-        inspectGeneratedStills(sessionId, successfulUrls([result]))
-    }),
+    (async () => {
+      if (!models.length)
+        return
+      const results = await runJobsThenAppendToolResults(
+        models,
+        job => runModelGeneration(session, job.toolCallId, job.args, emit, signal),
+        (toolCallId, result) => appendToolResult(sessionId, toolCallId, result),
+      )
+      const imageResults = models.flatMap((job, index) => (
+        AGENT_MODELS.find(model => model.id === job.args.modelId)?.category === 'Image'
+          ? [results[index] || '']
+          : []
+      ))
+      inspectGeneratedStills(sessionId, successfulUrls(imageResults))
+    })(),
     runGenerations(sessionId, images, emit, signal, caps),
     runVideos(sessionId, videos, emit, signal, caps),
   ])

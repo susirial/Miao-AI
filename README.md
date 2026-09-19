@@ -59,6 +59,8 @@ The agent shows a confirmation card before it generates. Annotated image edit no
 
 Save-and-test now says so when no API key is configured, instead of looking like the button did nothing. Failed model requests log the host and error cause without writing keys.
 
+When several model stills finish in parallel, the agent writes every tool result before inspecting them, so the next turn is not blocked.
+
 #### Text to image · Agnes Image 2.5 Flash
 
 Describe the frame in natural language. The confirmation card lists the selected model and prompt, as in this Michael Jordan slam-dunk text-to-image job.
