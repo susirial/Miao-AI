@@ -49,13 +49,29 @@ Bring your own keys. There is no Miao account or cloud workspace. Projects, chat
 
 ### 19 September 2026 — Agnes models and media families
 
-Service connection now has three independent picks: text, image, and video. Home cards open the matching generator model; an explicit `@` or deep-link choice is not overwritten by the saved family.
+Service connection now has three independent picks: text, image, and video. Home cards open the matching generator model; an explicit `@` or deep-link choice is not overwritten by the saved family. One [Agnes](https://platform.agnes-ai.com/) key unlocks Agnes text, image, and video.
 
-- **Text:** Agnes 2.5 Flash and Agnes 3.0 Flash
-- **Image:** Agnes Image 2.5 Flash alongside Seedream 5.0 Pro
-- **Video:** Agnes Video 2.5 Flash alongside Seedance 2.0
+- **Text:** [Agnes 2.5 Flash](https://wiki.agnes-ai.com/en/docs/agnes-25-flash.md) and [Agnes 3.0 Flash](https://agnes-ai.com/zh-Hans/docs/agnes-30-flash). Chat Vision accepts public HTTP(S) image URLs only.
+- **Image:** Agnes Image 2.5 Flash alongside Seedream 5.0 Pro. Text-to-image, image-to-image, and reference-to-image; pick a 1K–4K size tier and ratio. Local JPEG, PNG, and WEBP files are sent as Data URIs.
+- **Video:** Agnes Video 2.5 Flash alongside Seedance 2.0. Output is 720P for 4–12 seconds. Image-to-video and reference-to-video take public HTTPS image or audio URLs only (up to 5 reference stills). Local uploads and reference videos are not supported.
 
-One Agnes key unlocks Agnes text, image, and video. Annotated image edit no longer sends remapped TOS stills as vision URLs; Agnes Image inlines reachable HTTP(S) stills as data URIs instead.
+The agent shows a confirmation card before it generates. Annotated image edit no longer sends remapped TOS stills as vision URLs; Agnes Image inlines reachable HTTP(S) stills as data URIs instead.
+
+#### Text to image · Agnes Image 2.5 Flash
+
+Describe the frame in natural language. The confirmation card lists the selected model and prompt, as in this Michael Jordan slam-dunk text-to-image job.
+
+<p align="center">
+  <img src="docs/images/agnes/text-to-image.png" alt="Agnes Image 2.5 Flash text-to-image confirmation card" width="360">
+</p>
+
+#### Multi-image reference to video · Agnes Video 2.5 Flash
+
+Pass several public HTTPS stills into reference-to-video. The card shows 720P, duration, aspect ratio, and the reference list — here two Jordan photos for a 5-second 16:9 clip.
+
+<p align="center">
+  <img src="docs/images/agnes/reference-to-video.png" alt="Agnes Video 2.5 Flash multi-image reference-to-video confirmation card" width="360">
+</p>
 
 ### 16 September 2026 — Guided skills
 

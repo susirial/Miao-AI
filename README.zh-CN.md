@@ -49,13 +49,29 @@
 
 ### 2026-09-19 — Agnes 模型与生图 / 生视频选择
 
-服务连接现可分别选择文本、生图、生视频模型。首页卡片会打开对应 Generator 模型；用 `@` 或深链指定的模型不会被已保存的媒体族偏好覆盖。
+服务连接现可分别选择文本、生图、生视频模型。首页卡片会打开对应 Generator 模型；用 `@` 或深链指定的模型不会被已保存的媒体族偏好覆盖。一个 [Agnes](https://platform.agnes-ai.com/) 密钥同时解锁文本、生图和生视频。
 
-- **文本：** Agnes 2.5 Flash、Agnes 3.0 Flash
-- **生图：** Agnes Image 2.5 Flash，可与 Seedream 5.0 Pro 并列选择
-- **生视频：** Agnes Video 2.5 Flash，可与 Seedance 2.0 并列选择
+- **文本：** [Agnes 2.5 Flash](https://wiki.agnes-ai.com/en/docs/agnes-25-flash.md)、[Agnes 3.0 Flash](https://agnes-ai.com/zh-Hans/docs/agnes-30-flash)。对话 Vision 只接受公开可访问的 HTTP(S) 图片 URL。
+- **生图：** Agnes Image 2.5 Flash，可与 Seedream 5.0 Pro 并列选择。支持文生图、图生图、参考生图；可指定 1K–4K 档位与比例。本地 JPEG / PNG / WEBP 会转成 Data URI，不必先传到公网。
+- **生视频：** Agnes Video 2.5 Flash，可与 Seedance 2.0 并列选择。固定 720P、4–12 秒。图生视频 / 参考生视频只用公网 HTTPS 图片或音频 URL（参考图最多 5 张），不支持本地上传或参考视频。
 
-一个 Agnes 密钥同时解锁文本、生图和生视频。标注修图不再把 TOS 重映射后的静图当 vision URL 发给模型；Agnes Image 会把可达的 HTTP(S) 静图内联为 data URI。
+Agent 出图或出片前会弹出确认卡，核对模型、提示词和参数后再生成。标注修图不再把 TOS 重映射后的静图当 vision URL 发给模型；Agnes Image 会把可达的 HTTP(S) 静图内联为 data URI。
+
+#### 文生图 · Agnes Image 2.5 Flash
+
+用自然语言描述画面。确认卡会列出所选模型和提示词，例如下面这张「迈达克·乔丹空中标志性单手持球」的文生图任务。
+
+<p align="center">
+  <img src="docs/images/agnes/text-to-image.png" alt="Agnes Image 2.5 Flash 文生图确认卡" width="360">
+</p>
+
+#### 多图参考生视频 · Agnes Video 2.5 Flash
+
+把多张公开 HTTPS 参考图交给参考生视频。确认卡会展示 720P、时长、画幅和参考图列表，例如下面用两张乔丹照片做 5 秒 16:9 参考生视频。
+
+<p align="center">
+  <img src="docs/images/agnes/reference-to-video.png" alt="Agnes Video 2.5 Flash 多图参考生视频确认卡" width="360">
+</p>
 
 ### 2026-09-16 — 引导式创作 Skill
 
