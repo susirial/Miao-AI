@@ -1,5 +1,9 @@
 import type { GenerationProvider } from '../../../shared/types/generation'
-import { isArkImageModelId, isArkVideoModelId } from '../../../shared/constants/aiModels'
+import { isAgnesImageModelId, isAgnesVideoModelId, isArkImageModelId, isArkVideoModelId } from '../../../shared/constants/aiModels'
+import { AGNES_IMAGE_PROTOCOL_VERSION } from './agnesImage'
+import { AGNES_IMAGE_MODEL_ID } from './agnesImageInput'
+import { AGNES_VIDEO_PROTOCOL_VERSION } from './agnesVideo'
+import { AGNES_VIDEO_MODEL_ID } from './agnesVideoInput'
 import { ARK_IMAGE_PROTOCOL_VERSION } from './arkImage'
 import { ARK_IMAGE_MODEL_ID } from './arkImageInput'
 import { ARK_VIDEO_PROTOCOL_VERSION } from './arkVideo'
@@ -16,6 +20,20 @@ function badRequest(message: string): never {
 }
 
 export function resolveMediaGenerationBackend(model: string): ResolvedMediaBackend {
+  if (isAgnesImageModelId(model)) {
+    return {
+      provider: 'agnes-image',
+      backendModelId: AGNES_IMAGE_MODEL_ID,
+      protocolVersion: AGNES_IMAGE_PROTOCOL_VERSION,
+    }
+  }
+  if (isAgnesVideoModelId(model)) {
+    return {
+      provider: 'agnes-video',
+      backendModelId: AGNES_VIDEO_MODEL_ID,
+      protocolVersion: AGNES_VIDEO_PROTOCOL_VERSION,
+    }
+  }
   if (isArkImageModelId(model)) {
     return {
       provider: 'ark-image',

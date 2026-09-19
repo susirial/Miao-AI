@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ConfirmationPayload } from '~/composables/useAgentLab'
 import { Clock3 } from 'lucide-vue-next'
-import { SEEDREAM_5_ASPECT_RATIOS, SEEDREAM_5_RESOLUTIONS } from '~~/shared/constants/aiModels'
+import { AGNES_IMAGE_RATIOS, AGNES_IMAGE_SIZE_TIERS, SEEDREAM_5_ASPECT_RATIOS, SEEDREAM_5_RESOLUTIONS } from '~~/shared/constants/aiModels'
 import { isMediaUrl, isMediaVideoUrl } from '~~/shared/utils/mediaUrl'
 import { SEEDANCE_2_ASPECT_RATIOS, SEEDANCE_2_DURATIONS, SEEDANCE_2_RESOLUTIONS } from '~~/shared/utils/seedance2'
 import AspectRatioIcon from '@/components/ai-generator/AspectRatioIcon.vue'
@@ -88,6 +88,12 @@ const isImageToVideo = computed(() => {
     return mode === 'image'
   return aspectRatio.value === 'adaptive'
 })
+const isAgnesImage = computed(() => {
+  const modelId = props.confirmation.params.modelId || ''
+  return modelId.includes('agnes/image-') || (props.confirmation.modelName || '').includes('Agnes Image')
+})
+const imageAspectRatios = computed(() => isAgnesImage.value ? AGNES_IMAGE_RATIOS : SEEDREAM_5_ASPECT_RATIOS)
+const imageResolutions = computed(() => isAgnesImage.value ? AGNES_IMAGE_SIZE_TIERS : SEEDREAM_5_RESOLUTIONS)
 const videoAspectRatios = computed(() => SEEDANCE_2_ASPECT_RATIOS)
 const videoResolutions = computed(() => SEEDANCE_2_RESOLUTIONS)
 const videoDurations = computed(() => SEEDANCE_2_DURATIONS)
@@ -110,7 +116,7 @@ const paramSummary = computed(() => {
   if (params.videoMode === 'reference')
     parts.push('Reference')
   if (kind.value === 'video') {
-    parts.push('Seedance 2.0')
+    parts.push(props.confirmation.modelName || params.modelId || 'Video model')
   }
   if ((kind.value === 'video' || kind.value === 'mixed') && params.duration)
     parts.push(`${params.duration}s`)
@@ -189,17 +195,16 @@ const modelLabel = computed(() => {
   if (name)
     return name
   if (kind.value === 'video') {
-    const model = 'Seedance 2.0'
     const taskName = props.confirmation.params.videoMode === 'reference'
       ? 'Reference to Video'
       : isImageToVideo.value
         ? 'Image to Video'
         : 'Text to Video'
-    return `${model} ${taskName}`
+    return name ? `${name} ${taskName}` : taskName
   }
   if (kind.value === 'mixed')
     return 'Multiple models Mixed jobs'
-  return `Seedream 5.0 Pro ${imageTask.value}`
+  return name || imageTask.value
 })
 
 function openInput(url: string, label: string) {
@@ -439,7 +444,7 @@ function emitConfirm() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="ratio in SEEDREAM_5_ASPECT_RATIOS" :key="ratio" :value="ratio">
+              <SelectItem v-for="ratio in imageAspectRatios" :key="ratio" :value="ratio">
                 <span class="flex items-center gap-2">
                   <AspectRatioIcon :ratio="ratio" />
                   <span>{{ ratio }}</span>
@@ -468,7 +473,7 @@ function emitConfirm() {
             @update:model-value="setResolution"
           >
             <ToggleGroupItem
-              v-for="item in SEEDREAM_5_RESOLUTIONS"
+              v-for="item in imageResolutions"
               :key="item"
               :value="item"
               class="flex-1"

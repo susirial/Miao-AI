@@ -1,5 +1,6 @@
 import type { SchemaProperty } from '~~/shared/types/aiModel'
 import type { GenerationProvider } from '~~/shared/types/generation'
+import type { AgentMediaCapabilities } from './mediaModels'
 import type { AgentSession } from './session'
 import type { AgentEvent, AgentImage } from './types'
 import { AGENT_MODELS, agentModelInputSchema, findAgentModelTool, readModelMentions, validateAgentModelInput } from '~~/shared/utils/agentModels'
@@ -30,7 +31,12 @@ export function selectedModelIds(session: Pick<AgentSession, 'messages'>) {
   }
   return []
 }
-export async function prepareModelGeneration(tool: string, json: string, session: AgentSession): Promise<ModelGeneration> {
+export async function prepareModelGeneration(
+  tool: string,
+  json: string,
+  session: AgentSession,
+  caps: AgentMediaCapabilities,
+): Promise<ModelGeneration> {
   const requestedModel = findAgentModelTool(tool)
   if (!requestedModel)
     throw new Error('Unknown model')
@@ -97,7 +103,7 @@ export async function prepareModelGeneration(tool: string, json: string, session
       raw[key] = Array.isArray(raw[key]) ? raw[key].map(resolve) : resolve(raw[key])
   }
   const validated = validateAgentModelInput(model, raw)
-  const spec = resolveAgentGenerationSpec(model, validated)
+  const spec = await resolveAgentGenerationSpec(model, validated, caps)
   return {
     modelId: model.id,
     name: String(raw._name || model.name).slice(0, 100),
@@ -108,7 +114,7 @@ export async function prepareModelGeneration(tool: string, json: string, session
     providerMetadata: spec.providerMetadata,
     requestBody: spec.requestBody,
     uncertainFields: Array.isArray(raw._uncertain_fields) ? raw._uncertain_fields.filter((key: unknown) => typeof key === 'string' && key in inputSchema.properties) : [],
-    inputUrls: Object.entries(spec.input).filter(([key]) => key.includes('url') || inputSchema.properties[key]?.['x-ui-component'] === 'uploaders').flatMap(([, value]) => Array.isArray(value) ? value : [value]).map(canonicalMediaUrl).filter(Boolean),
+    inputUrls: Object.entries(validated).filter(([key]) => key.includes('url') || inputSchema.properties[key]?.['x-ui-component'] === 'uploaders').flatMap(([, value]) => Array.isArray(value) ? value : [value]).map(canonicalMediaUrl).filter(Boolean),
   }
 }
 export function modelConfirmation(args: ModelGeneration) {
@@ -145,7 +151,7 @@ export async function runModelGeneration(session: AgentSession, callId: string, 
           providerMetadata: args.providerMetadata || {},
           requestBody: args.requestBody,
         }
-      : resolveAgentGenerationSpec(model, args.input)
+      : await resolveAgentGenerationSpec(model, args.input)
   }
   catch (error) {
     const message = error instanceof Error ? error.message : 'Generation could not be prepared'

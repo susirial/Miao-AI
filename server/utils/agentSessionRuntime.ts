@@ -21,6 +21,8 @@ export interface AgentRuntimeSnapshot {
   title: string
   quality: 'high' | 'economy' | 'hobby' | 'custom'
   confirmPolicy: 'auto' | 'when_needed' | 'always'
+  imageFamily?: 'ark-image' | 'agnes-image'
+  videoFamily?: 'ark-video' | 'agnes-video'
   messages: unknown[]
   images: unknown[]
   pendingConfirmation: unknown
@@ -256,6 +258,8 @@ export function runtimeFromDoc(doc: IAgentChat): AgentRuntimeSnapshot | null {
     title: clip(runtime.title || doc.title, 80),
     quality: parseQuality(runtime.quality || doc.quality),
     confirmPolicy: parseConfirmPolicy(runtime.confirmPolicy || doc.confirmPolicy),
+    imageFamily: runtime.imageFamily === 'agnes-image' || runtime.imageFamily === 'ark-image' ? runtime.imageFamily : undefined,
+    videoFamily: runtime.videoFamily === 'agnes-video' || runtime.videoFamily === 'ark-video' ? runtime.videoFamily : undefined,
     messages,
     images,
     pendingConfirmation: sanitizePending(runtime.pendingConfirmation),
@@ -298,6 +302,8 @@ export async function upsertAgentRuntime(input: {
   title?: unknown
   quality?: unknown
   confirmPolicy?: unknown
+  imageFamily?: unknown
+  videoFamily?: unknown
   messages?: unknown
   images?: unknown
   replaceImages?: boolean
@@ -331,10 +337,22 @@ export async function upsertAgentRuntime(input: {
     const existingUpdatedAt = Number(existingRuntime?.updatedAt) || 0
     if (existing && existingUpdatedAt > updatedAt)
       return existing
+    const imageFamily = input.imageFamily === 'agnes-image' || input.imageFamily === 'ark-image'
+      ? input.imageFamily
+      : existingRuntime?.imageFamily === 'agnes-image' || existingRuntime?.imageFamily === 'ark-image'
+        ? existingRuntime.imageFamily
+        : undefined
+    const videoFamily = input.videoFamily === 'agnes-video' || input.videoFamily === 'ark-video'
+      ? input.videoFamily
+      : existingRuntime?.videoFamily === 'agnes-video' || existingRuntime?.videoFamily === 'ark-video'
+        ? existingRuntime.videoFamily
+        : undefined
     const runtime = {
       title,
       quality,
       confirmPolicy,
+      imageFamily,
+      videoFamily,
       messages,
       images,
       pendingConfirmation,

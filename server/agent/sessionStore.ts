@@ -26,6 +26,8 @@ export interface StoredSessionSnapshot {
   title?: string
   quality: AgentQuality
   confirmPolicy: AgentConfirmPolicy
+  imageFamily?: 'ark-image' | 'agnes-image'
+  videoFamily?: 'ark-video' | 'agnes-video'
   messages: ChatMessage[]
   images: AgentImage[]
   pendingConfirmation: RemotePendingConfirmation | null
@@ -40,6 +42,8 @@ function asSnapshot(raw: AgentRuntimeSnapshot): StoredSessionSnapshot {
     title: raw.title || '',
     quality: parseAgentQuality(raw.quality),
     confirmPolicy: parseAgentConfirmPolicy(raw.confirmPolicy),
+    imageFamily: raw.imageFamily === 'agnes-image' || raw.imageFamily === 'ark-image' ? raw.imageFamily : undefined,
+    videoFamily: raw.videoFamily === 'agnes-video' || raw.videoFamily === 'ark-video' ? raw.videoFamily : undefined,
     messages: Array.isArray(raw.messages) ? raw.messages as ChatMessage[] : [],
     images: Array.isArray(raw.images) ? raw.images as AgentImage[] : [],
     pendingConfirmation: raw.pendingConfirmation && typeof raw.pendingConfirmation === 'object'
@@ -78,6 +82,8 @@ export async function putStoredSession(input: {
   title?: string
   quality: AgentQuality
   confirmPolicy: AgentConfirmPolicy
+  imageFamily?: 'ark-image' | 'agnes-image'
+  videoFamily?: 'ark-video' | 'agnes-video'
   messages: ChatMessage[]
   images: AgentImage[]
   replaceImages?: boolean
@@ -95,6 +101,8 @@ export async function putStoredSession(input: {
       title: input.title || '',
       quality: input.quality,
       confirmPolicy: input.confirmPolicy,
+      imageFamily: input.imageFamily,
+      videoFamily: input.videoFamily,
       messages: input.messages,
       images: input.images,
       replaceImages: input.replaceImages,

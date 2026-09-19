@@ -13,6 +13,8 @@ test('thinking is separated from the formal answer, including incomplete streams
   assert.equal(splitAgentThinking('<think>Plan the edit</think>Done.').thinking, 'Plan the edit')
   assert.equal(splitAgentThinking('<think>Plan the edit</think>Done.').answer, 'Done.')
   assert.equal(splitAgentThinking('<think>Still planning').answer, '')
+  assert.equal(splitAgentThinking('<think>还在想').thinking, '还在想')
+  assert.equal(splitAgentThinking('<think>还在想').answer, '')
   assert.equal(splitAgentThinking('<thi').answer, '')
   assert.equal(splitAgentThinking('<thinking>First</thinking><think>Second</think>Answer').thinking, 'First\n\nSecond')
   assert.equal(splitAgentThinking('The user wants a blue background.').answer, 'The user wants a blue background.')

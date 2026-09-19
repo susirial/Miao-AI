@@ -9,9 +9,12 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<Record<string, unknown>>(event)
   const stringFields = [
     'selectedTextModel',
+    'selectedImageFamily',
+    'selectedVideoFamily',
     'arkKey',
     'deepSeekKey',
     'zaiKey',
+    'agnesKey',
     'tosAccessKeyId',
     'tosSecretAccessKey',
     'tosBucket',
@@ -33,9 +36,12 @@ export default defineEventHandler(async (event) => {
   try {
     const settings = updateServiceSettings({
       selectedTextModel: body.selectedTextModel as string | undefined,
+      selectedImageFamily: body.selectedImageFamily as string | undefined,
+      selectedVideoFamily: body.selectedVideoFamily as string | undefined,
       arkKey: body.arkKey as string | undefined,
       deepSeekKey: body.deepSeekKey as string | undefined,
       zaiKey: body.zaiKey as string | undefined,
+      agnesKey: body.agnesKey as string | undefined,
       tosAccessKeyId: body.tosAccessKeyId as string | undefined,
       tosSecretAccessKey: body.tosSecretAccessKey as string | undefined,
       tosBucket: body.tosBucket as string | undefined,
@@ -44,10 +50,12 @@ export default defineEventHandler(async (event) => {
     return await testServiceConnections(settings)
   }
   catch (error) {
-    if (error instanceof ServiceSettingsRevisionError)
-      throw createError({ statusCode: 409, statusMessage: error.message })
-    if (error instanceof TypeError)
-      throw createError({ statusCode: 400, statusMessage: 'Invalid connection settings' })
+    const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : ''
+    const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error)
+    if (error instanceof ServiceSettingsRevisionError || name === 'ServiceSettingsRevisionError')
+      throw createError({ statusCode: 409, statusMessage: message })
+    if (error instanceof TypeError || name === 'TypeError')
+      throw createError({ statusCode: 400, statusMessage: message })
     throw error
   }
 })

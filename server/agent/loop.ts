@@ -1,10 +1,11 @@
+import type { AgentMediaCapabilities } from './mediaModels'
 import type { ModelGeneration } from './models'
 import type { AgentSession, PendingToolItem } from './session'
 import type { AgentConfirmPolicy, AgentEvent, AgentImage, AskUserArgs, ChatMessage, ChoiceAnswer, ChoiceBody, ChoiceQuestion, ConfirmationPayload, ConfirmBody, GenerateImageArgs, ResolvedGenerateVideo, ToolCall, UserContentPart } from './types'
 import { isNonRetryableGenerationFailure } from '~~/shared/types/generation'
 import { withCustomChoiceOption } from '~~/shared/utils/agentChoices'
 import { normalizeAgentLocale } from '~~/shared/utils/agentLocale'
-import { askUserPublicPrompt, wrapAssistantLoopText } from '~~/shared/utils/agentLoopText'
+import { askUserPublicPrompt, visibleAssistantStreamEvent, wrapAssistantLoopText } from '~~/shared/utils/agentLoopText'
 import { AGENT_MODELS, findAgentModelTool, readModelMentions, registeredModelToolsFor } from '~~/shared/utils/agentModels'
 import { AGENT_INTERRUPT_NOTE, agentStopNote, isAgentStopNote } from '~~/shared/utils/agentStopNote'
 import { cleanAssetName } from '~~/shared/utils/assetName'
@@ -17,7 +18,8 @@ import { concatVideoUrls } from './concat'
 import { EXPORT_ZIP_TOOL, exportSessionZip, resolveZipExport } from './exportZip'
 import { annotationReferenceImages, confirmedAnnotationEdit, renderAnnotationImage } from './imageAnnotations'
 import { assembleToolCalls, streamChat } from './llm'
-import { availableAgentModels, preparePresetImage, preparePresetVideo, presetImageModelId, presetVideoModelId } from './mediaModels'
+import { hydrateAskUserArgs, mediaFamilyAskForGeneration, mediaFamilyFromChoice } from './mediaFamilyChoice'
+import { availableAgentModels, captureMediaCapabilities, preparePresetImage, preparePresetVideo, presetImageModelId, presetVideoModelId, resolveAgentGenerationSpec } from './mediaModels'
 import { modelPreferenceFromChoice } from './modelPreference'
 import { modelConfirmation, prepareModelGeneration, runModelGeneration, selectedModelIds } from './models'
 import { MAX_STEPS } from './policy'
@@ -25,10 +27,11 @@ import { applyImageQuality, applyVideoQuality, clampVideoToFamily, parseAgentCon
 import { runQueuedAgentGeneration } from './queuedGeneration'
 import { restoreSessionContext } from './restore'
 import { scheduleSessionResume } from './resume'
-import { choiceAlreadyAnswered, confirmationAlreadyStarted, refreshSessionPrompt, requireLoadedSession, requireSession, resolveChatSession, touch, upsertImage } from './session'
+import { choiceAlreadyAnswered, confirmationAlreadyStarted, persistNow, refreshSessionPrompt, requireLoadedSession, requireSession, resolveChatSession, touch, upsertImage } from './session'
 import { assertSketchQuestion, sketchBrief, sketchGenerationSubmitted, validateSketchReferences } from './sketchBrief'
 import { summarizeSessionTitle } from './title'
-import { ASK_USER_TOOL, CONCAT_VIDEO_TOOL, GENERATE_IMAGE_TOOL, GENERATE_VIDEO_TOOL, openAiTools, parseAskUserArgs, parseConcatVideoArgs, parseGenerateImageArgs, parseGenerateVideoArgs, resolveConcatVideoUrls, resolveGenerateImageArgs, resolveGenerateVideoArgs } from './tools'
+import { readServiceSettings, rememberMediaFamilies } from '../utils/serviceSettings'
+import { ASK_USER_TOOL, capabilityRequeueFallback, CONCAT_VIDEO_TOOL, GENERATE_IMAGE_TOOL, GENERATE_VIDEO_TOOL, parseAskUserArgs, parseConcatVideoArgs, parseGenerateImageArgs, parseGenerateVideoArgs, requiredToolIfListed, resolveConcatVideoUrls, resolveGenerateImageArgs, resolveGenerateVideoArgs, selectAgentLoopTools } from './tools'
 import { recoverableToolResultImages, removeOrphanToolMessages } from './toolTranscript'
 import { uploadAgentImage } from './upload'
 
@@ -36,6 +39,52 @@ type Emit = (event: AgentEvent) => void
 const autoConfirmInFlight = new Set<string>()
 function sessionWantsStop(session: AgentSession) {
   return Boolean(session.stopRequested)
+}
+function sessionCaps(session: AgentSession) {
+  return captureMediaCapabilities({
+    imageFamily: session.imageFamily,
+    videoFamily: session.videoFamily,
+  })
+}
+function lastUsedFamilies() {
+  const settings = readServiceSettings()
+  return {
+    lastUsedImage: settings.selectedImageFamily,
+    lastUsedVideo: settings.selectedVideoFamily,
+  }
+}
+function applyMediaFamilyChoice(session: AgentSession, payload: NonNullable<AgentSession['pendingChoice']>['payload'], body: ChoiceBody) {
+  const picked = mediaFamilyFromChoice(payload, body)
+  if (picked.quality)
+    session.quality = picked.quality
+  if (picked.imageFamily)
+    session.imageFamily = picked.imageFamily
+  if (picked.videoFamily)
+    session.videoFamily = picked.videoFamily
+  if (picked.imageFamily || picked.videoFamily) {
+    rememberMediaFamilies({
+      selectedImageFamily: picked.imageFamily,
+      selectedVideoFamily: picked.videoFamily,
+    })
+  }
+  return picked
+}
+function pauseForMediaFamilyChoice(sessionId: string, args: NonNullable<ReturnType<typeof mediaFamilyAskForGeneration>>, emit: Emit) {
+  const session = requireSession(sessionId)
+  const toolCallId = `call_family_${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`
+  session.messages.push({
+    role: 'assistant',
+    content: null,
+    tool_calls: [{
+      id: toolCallId,
+      type: 'function',
+      function: {
+        name: ASK_USER_TOOL,
+        arguments: JSON.stringify(args),
+      },
+    }],
+  })
+  queueAskUser(sessionId, [{ toolCallId, args }], emit)
 }
 export function sessionInFlightGenerationCount(session: AgentSession) {
   return session.images.filter(item => item.status === 'generating').length
@@ -93,8 +142,13 @@ async function tryServerAutoConfirm(sessionId: string, emit: Emit, signal?: Abor
   if (sessionWantsStop(session))
     return false
   const pending = session.pendingConfirmation
-  if (!pending || !shouldServerAutoConfirm(session.confirmPolicy, pending.payload))
+  if (!pending || pending.manualApprovalRequired || !shouldServerAutoConfirm(session.confirmPolicy, pending.payload))
     return false
+  const liveCaps = sessionCaps(session)
+  if (pending.caps && pending.caps.fingerprint !== liveCaps.fingerprint) {
+    await requeuePendingForCapabilities(session, pending, liveCaps, emit)
+    return false
+  }
   const items = pending.items
   const params = pending.payload.params
   const confirmationId = pending.payload.id
@@ -111,7 +165,7 @@ async function tryServerAutoConfirm(sessionId: string, emit: Emit, signal?: Abor
     confirmationId,
     action: 'confirm',
     params,
-  }, emit, signal)
+  }, emit, signal, pending.caps)
   return true
 }
 /** Resume a parked auto confirmation after the browser left or the process restarted. */
@@ -119,8 +173,13 @@ export async function continueServerAutoConfirm(sessionId: string) {
   const session = requireSession(sessionId)
   if (session.busy || sessionWantsStop(session) || session.retryBlocked || autoConfirmInFlight.has(sessionId))
     return false
-  if (!session.pendingConfirmation || !shouldServerAutoConfirm(session.confirmPolicy, session.pendingConfirmation.payload))
+  if (
+    !session.pendingConfirmation
+    || session.pendingConfirmation.manualApprovalRequired
+    || !shouldServerAutoConfirm(session.confirmPolicy, session.pendingConfirmation.payload)
+  ) {
     return false
+  }
   autoConfirmInFlight.add(sessionId)
   session.busy = true
   touch(session)
@@ -211,6 +270,21 @@ function needsLoopContinuation(session: AgentSession) {
  * Continue an Automatic session after deploy/restart once media has settled:
  * seal tool results, auto-confirm if needed, then run the agent loop again.
  */
+function agentContinueFailureMessage(error: unknown) {
+  const raw = error instanceof Error ? error.message : ''
+  if (/loading IMAGE data|Timed out while downloading media/i.test(raw))
+    return 'Agnes could not download an attached image in time. Generation can still use the listed local media URLs.'
+  return ''
+}
+
+function sealContinueFailure(session: AgentSession, error: unknown) {
+  const message = agentContinueFailureMessage(error)
+  if (!message || sessionWantsStop(session) || !needsLoopContinuation(session))
+    return
+  session.messages.push({ role: 'assistant', content: message })
+  persistNow(session)
+}
+
 export async function continueAgentSession(sessionId: string) {
   const session = requireSession(sessionId)
   if (session.busy || sessionWantsStop(session) || autoConfirmInFlight.has(sessionId))
@@ -232,6 +306,10 @@ export async function continueAgentSession(sessionId: string) {
   try {
     await runAgentLoop(sessionId, () => { })
     return true
+  }
+  catch (error) {
+    sealContinueFailure(requireSession(sessionId), error)
+    throw error
   }
   finally {
     session.busy = false
@@ -266,15 +344,25 @@ async function maybeEmitTitle(sessionId: string, emit: Emit) {
 }
 function generationPreparationFailure(toolName: string, callId: string, error: unknown, emit: Emit) {
   const message = error instanceof Error ? error.message : 'Generation could not be prepared'
+  const failCode = error && typeof error === 'object' && 'failCode' in error
+    ? String((error as { failCode?: unknown }).failCode || '').trim()
+    : ''
   emit({ type: 'tool', name: toolName, status: 'start', callId })
   emit({ type: 'tool', name: toolName, status: 'end', callId })
-  return JSON.stringify({ ok: false, error: message })
+  return JSON.stringify({ ok: false, error: message, ...(failCode ? { failCode } : {}) })
 }
-async function runGeneration(sessionId: string, callId: string, args: GenerateImageArgs, emit: Emit, signal?: AbortSignal) {
+async function runGeneration(
+  sessionId: string,
+  callId: string,
+  args: GenerateImageArgs,
+  emit: Emit,
+  signal?: AbortSignal,
+  caps?: AgentMediaCapabilities,
+) {
   const session = requireSession(sessionId)
   let spec
   try {
-    spec = preparePresetImage(args)
+    spec = await preparePresetImage(args, caps)
   }
   catch (error) {
     return generationPreparationFailure(GENERATE_IMAGE_TOOL, callId, error, emit)
@@ -314,11 +402,11 @@ function appendToolResult(sessionId: string, toolCallId: string, content: string
 async function runGenerations(sessionId: string, jobs: Array<{
   toolCallId: string
   args: GenerateImageArgs
-}>, emit: Emit, signal?: AbortSignal) {
+}>, emit: Emit, signal?: AbortSignal, caps?: AgentMediaCapabilities) {
   if (!jobs.length)
     return
   emit({ type: 'status', status: 'generating' })
-  const results = await Promise.all(jobs.map(job => runGeneration(sessionId, job.toolCallId, job.args, emit, signal)))
+  const results = await Promise.all(jobs.map(job => runGeneration(sessionId, job.toolCallId, job.args, emit, signal, caps)))
   jobs.forEach((job, index) => {
     appendToolResult(sessionId, job.toolCallId, results[index] || JSON.stringify({ ok: false, error: 'Empty tool result' }))
   })
@@ -363,11 +451,18 @@ function inspectGeneratedStills(sessionId: string, urls: string[]) {
   })
   touch(session)
 }
-async function runVideo(sessionId: string, callId: string, args: ResolvedGenerateVideo, emit: Emit, signal?: AbortSignal) {
+async function runVideo(
+  sessionId: string,
+  callId: string,
+  args: ResolvedGenerateVideo,
+  emit: Emit,
+  signal?: AbortSignal,
+  caps?: AgentMediaCapabilities,
+) {
   const session = requireSession(sessionId)
   let spec
   try {
-    spec = preparePresetVideo(args)
+    spec = await preparePresetVideo(args, caps)
   }
   catch (error) {
     return generationPreparationFailure(GENERATE_VIDEO_TOOL, callId, error, emit)
@@ -412,11 +507,11 @@ async function runVideo(sessionId: string, callId: string, args: ResolvedGenerat
 async function runVideos(sessionId: string, jobs: Array<{
   toolCallId: string
   args: ResolvedGenerateVideo
-}>, emit: Emit, signal?: AbortSignal) {
+}>, emit: Emit, signal?: AbortSignal, caps?: AgentMediaCapabilities) {
   if (!jobs.length)
     return
   emit({ type: 'status', status: 'generating' })
-  const results = await Promise.all(jobs.map(job => runVideo(sessionId, job.toolCallId, job.args, emit, signal)))
+  const results = await Promise.all(jobs.map(job => runVideo(sessionId, job.toolCallId, job.args, emit, signal, caps)))
   jobs.forEach((job, index) => {
     appendToolResult(sessionId, job.toolCallId, results[index] || JSON.stringify({ ok: false, error: 'Empty tool result' }))
   })
@@ -583,9 +678,14 @@ function confirmationKind(tools: string[]): ConfirmationPayload['kind'] {
     return 'video'
   return 'image'
 }
-function confirmationModel(kind: ConfirmationPayload['kind'], imageArgs?: GenerateImageArgs, videoArgs?: ResolvedGenerateVideo) {
+function confirmationModel(
+  kind: ConfirmationPayload['kind'],
+  imageArgs?: GenerateImageArgs,
+  videoArgs?: ResolvedGenerateVideo,
+  caps?: AgentMediaCapabilities,
+) {
   if (kind === 'video') {
-    const modelId = videoArgs ? presetVideoModelId(videoArgs) : ''
+    const modelId = videoArgs ? presetVideoModelId(videoArgs, caps) : ''
     const modelName = AGENT_MODELS.find(model => model.id === modelId)?.name || 'Video model'
     const task = videoArgs?.reference_image_urls?.length || videoArgs?.reference_video_urls?.length
       ? 'Reference to Video'
@@ -596,14 +696,20 @@ function confirmationModel(kind: ConfirmationPayload['kind'], imageArgs?: Genera
   }
   if (kind === 'mixed')
     return { modelName: 'Multiple models', task: 'Mixed jobs' }
-  const modelId = imageArgs ? presetImageModelId(imageArgs) : ''
+  const modelId = imageArgs ? presetImageModelId(imageArgs, caps) : ''
   const model = AGENT_MODELS.find(item => item.id === modelId)
   return {
     modelName: model?.name || 'Image model',
     task: model?.task || 'Text to Image',
   }
 }
-function queueGenerationWork(sessionId: string, items: PendingToolItem[], emit: Emit) {
+function queueGenerationWork(
+  sessionId: string,
+  items: PendingToolItem[],
+  emit: Emit,
+  caps = sessionCaps(requireSession(sessionId)),
+  manualApprovalRequired = false,
+) {
   const session = requireSession(sessionId)
   const first = items[0]
   if (!first)
@@ -624,7 +730,7 @@ function queueGenerationWork(sessionId: string, items: PendingToolItem[], emit: 
       inputUrls: jobs.flatMap(job => job.inputUrls),
       params: firstJob.params,
     }
-    session.pendingConfirmation = { payload: confirmation, items }
+    session.pendingConfirmation = { payload: confirmation, items, caps, manualApprovalRequired }
     touch(session)
     emit({ type: 'confirmation', confirmation })
     return
@@ -633,12 +739,12 @@ function queueGenerationWork(sessionId: string, items: PendingToolItem[], emit: 
   let videoArgs: ResolvedGenerateVideo | undefined
   try {
     if (first.tool === GENERATE_IMAGE_TOOL) {
-      imageArgs = withTurnImageInputs(resolveGenerateImageArgs(parseGenerateImageArgs(first.argsJson), session.images), session.messages)
+      imageArgs = withTurnImageInputs(resolveGenerateImageArgs(parseGenerateImageArgs(first.argsJson, caps), session.images), session.messages)
       first.argsJson = JSON.stringify(imageArgs)
     }
     if (first.tool === GENERATE_VIDEO_TOOL) {
-      const parsed = parseGenerateVideoArgs(first.argsJson)
-      videoArgs = resolveGenerateVideoArgs(clampVideoToFamily(parsed, parsed.family), session.images)
+      const parsed = parseGenerateVideoArgs(first.argsJson, caps)
+      videoArgs = resolveGenerateVideoArgs(clampVideoToFamily(parsed, parsed.family, caps), session.images, caps)
     }
   }
   catch {
@@ -647,7 +753,7 @@ function queueGenerationWork(sessionId: string, items: PendingToolItem[], emit: 
   const kind = confirmationKind(items.map(item => item.tool))
   const count = items.length
   const noun = kind === 'video' ? 'video' : kind === 'mixed' ? 'job' : 'still'
-  const model = confirmationModel(kind, imageArgs, videoArgs)
+  const model = confirmationModel(kind, imageArgs, videoArgs, caps)
   const inputUrls = confirmationInputUrls(imageArgs, videoArgs)
   const confirmation: ConfirmationPayload = {
     id: crypto.randomUUID(),
@@ -663,22 +769,27 @@ function queueGenerationWork(sessionId: string, items: PendingToolItem[], emit: 
       let video: ResolvedGenerateVideo | undefined
       try {
         if (item.tool === GENERATE_IMAGE_TOOL)
-          still = withTurnImageInputs(resolveGenerateImageArgs(parseGenerateImageArgs(item.argsJson), session.images), session.messages)
+          still = withTurnImageInputs(resolveGenerateImageArgs(parseGenerateImageArgs(item.argsJson, caps), session.images), session.messages)
         if (item.tool === GENERATE_VIDEO_TOOL) {
-          const parsed = parseGenerateVideoArgs(item.argsJson)
-          video = resolveGenerateVideoArgs(clampVideoToFamily(parsed, parsed.family), session.images)
+          const parsed = parseGenerateVideoArgs(item.argsJson, caps)
+          video = resolveGenerateVideoArgs(clampVideoToFamily(parsed, parsed.family, caps), session.images, caps)
         }
       }
       catch {
         // Keep this task identifiable even if its arguments are invalid.
       }
-      const meta = confirmationModel(confirmationKind([item.tool]), still, video)
+      const meta = confirmationModel(confirmationKind([item.tool]), still, video, caps)
       return {
         id: item.toolCallId,
         name: still?.name || video?.name || `Task ${index + 1}`,
         ...meta,
         inputUrls: confirmationInputUrls(still, video),
         params: {
+          modelId: still
+            ? presetImageModelId(still, caps)
+            : video
+              ? presetVideoModelId(video, caps)
+              : undefined,
           prompt: still?.prompt || video?.prompt || '',
           aspectRatio: still?.aspect_ratio || video?.aspect_ratio || '',
           resolution: still?.resolution || video?.resolution || '',
@@ -693,6 +804,11 @@ function queueGenerationWork(sessionId: string, items: PendingToolItem[], emit: 
     task: model.task,
     ...(inputUrls.length ? { inputUrls } : {}),
     params: {
+      modelId: imageArgs
+        ? presetImageModelId(imageArgs, caps)
+        : videoArgs
+          ? presetVideoModelId(videoArgs, caps)
+          : undefined,
       prompt: imageArgs?.prompt || videoArgs?.prompt || '',
       aspectRatio: imageArgs?.aspect_ratio || videoArgs?.aspect_ratio || 'auto',
       resolution: imageArgs?.resolution || videoArgs?.resolution || '',
@@ -710,6 +826,8 @@ function queueGenerationWork(sessionId: string, items: PendingToolItem[], emit: 
   session.pendingConfirmation = {
     payload: confirmation,
     items,
+    caps,
+    manualApprovalRequired,
   }
   touch(session)
   emit({ type: 'confirmation', confirmation })
@@ -777,7 +895,13 @@ function pauseForAnnotationChoice(sessionId: string, emit: Emit, reasoning = '')
     emit({ type: 'text_replace', delta: publicText })
   queueAskUser(sessionId, [{ toolCallId, args }], emit)
 }
-async function dispatchToolCalls(sessionId: string, toolCalls: ToolCall[], emit: Emit, signal?: AbortSignal) {
+async function dispatchToolCalls(
+  sessionId: string,
+  toolCalls: ToolCall[],
+  emit: Emit,
+  signal?: AbortSignal,
+  caps = sessionCaps(requireSession(sessionId)),
+) {
   type Prepared = {
     call: ToolCall
     kind: 'image'
@@ -816,20 +940,21 @@ async function dispatchToolCalls(sessionId: string, toolCalls: ToolCall[], emit:
   const prepared: Prepared[] = await Promise.all(toolCalls.map(async (call): Promise<Prepared> => {
     try {
       if (findAgentModelTool(call.function.name))
-        return { call, kind: 'model', args: await prepareModelGeneration(call.function.name, call.function.arguments, session) }
-      if ((session.quality === 'custom' || selectedModelIds(session).length) && [GENERATE_IMAGE_TOOL, GENERATE_VIDEO_TOOL].includes(call.function.name))
+        return { call, kind: 'model', args: await prepareModelGeneration(call.function.name, call.function.arguments, session, caps) }
+      if ((session.quality === 'custom' || selectedModelIds(session).length) && [GENERATE_IMAGE_TOOL, GENERATE_VIDEO_TOOL].includes(call.function.name) && !confirmedAnnotationEdit(session) && !sketchBrief(session.messages)?.understandingDone)
         throw new Error('Use the registered model tools for Custom mode or an explicitly selected model.')
       if (call.function.name === GENERATE_IMAGE_TOOL) {
         const args = withConfirmedSketchInputs(withConfirmedAnnotationInputs(
-          withTurnImageInputs(applyImageQuality(resolveGenerateImageArgs(parseGenerateImageArgs(call.function.arguments), session.images), session.quality || 'economy'), session.messages),
+          withTurnImageInputs(applyImageQuality(resolveGenerateImageArgs(parseGenerateImageArgs(call.function.arguments, caps), session.images), session.quality || 'economy'), session.messages),
           session,
         ), session)
-        preparePresetImage(args)
+        await preparePresetImage(args, caps)
         return { call, kind: 'image', args }
       }
       if (call.function.name === GENERATE_VIDEO_TOOL) {
-        const args = resolveGenerateVideoArgs(applyVideoQuality(parseGenerateVideoArgs(call.function.arguments), session.quality || 'economy'), session.images)
-        preparePresetVideo(args)
+        const parsed = parseGenerateVideoArgs(call.function.arguments, caps)
+        const args = resolveGenerateVideoArgs(applyVideoQuality(parsed, session.quality || 'economy', caps), session.images, caps)
+        await preparePresetVideo(args, caps)
         return { call, kind: 'video', args }
       }
       if (call.function.name === EXPORT_ZIP_TOOL)
@@ -839,7 +964,12 @@ async function dispatchToolCalls(sessionId: string, toolCalls: ToolCall[], emit:
         return { call, kind: 'concat', urls: resolveConcatVideoUrls(args, session.images) }
       }
       if (call.function.name === ASK_USER_TOOL) {
-        const args = parseAskUserArgs(call.function.arguments)
+        const args = hydrateAskUserArgs(parseAskUserArgs(call.function.arguments), {
+          arkOk: caps.arkOk,
+          agnesOk: caps.agnesOk,
+          locale: session.locale,
+          ...lastUsedFamilies(),
+        })
         assertSketchQuestion(session.messages, args.questions)
         assertAnnotationQuestion(session.messages, args.questions, sessionStillUrls(session))
         return { call, kind: 'ask', args }
@@ -950,6 +1080,28 @@ async function dispatchToolCalls(sessionId: string, toolCalls: ToolCall[], emit:
   }
   if (!generation.length)
     return false
+  const familyAsk = mediaFamilyAskForGeneration({
+    kinds: generation.map(item => item.kind),
+    imageFamily: session.imageFamily,
+    videoFamily: session.videoFamily,
+    arkOk: caps.arkOk,
+    agnesOk: caps.agnesOk,
+    locale: session.locale,
+    ...lastUsedFamilies(),
+  })
+  if (familyAsk) {
+    for (const item of generation) {
+      appendToolResult(sessionId, item.call.id, JSON.stringify({
+        ok: false,
+        waitingForMediaFamily: true,
+        error: 'Choose a ready image or video model on the card, then continue.',
+      }))
+    }
+    if (sessionWantsStop(session))
+      return false
+    pauseForMediaFamilyChoice(sessionId, familyAsk, emit)
+    return true
+  }
   queueGenerationWork(sessionId, generation.map((item) => {
     if (item.kind === 'model')
       return { toolCallId: item.call.id, tool: item.call.function.name, argsJson: JSON.stringify(item.args) }
@@ -968,7 +1120,7 @@ async function dispatchToolCalls(sessionId: string, toolCalls: ToolCall[], emit:
       }
     }
     throw new Error('Unsupported generation tool')
-  }), emit)
+  }), emit, caps)
   return true
 }
 async function runAgentLoopWithSnapshot(sessionId: string, emit: Emit, signal?: AbortSignal) {
@@ -996,7 +1148,8 @@ async function runAgentLoopWithSnapshot(sessionId: string, emit: Emit, signal?: 
         session.messages = repaired.messages
         touch(session)
       }
-      refreshSessionPrompt(session)
+      const mediaCaps = sessionCaps(session)
+      refreshSessionPrompt(session, mediaCaps)
       const registeredModels = availableAgentModels()
       const sketch = sketchBrief(session.messages)
       const sketchSubmitted = Boolean(sketch && sketchGenerationSubmitted(session.messages, session.images))
@@ -1005,6 +1158,18 @@ async function runAgentLoopWithSnapshot(sessionId: string, emit: Emit, signal?: 
       const annotation = annotationBrief(session.messages, sessionStillUrls(session))
       const requireAnnotationQuestion = Boolean(annotation?.sourceUrls.length && !annotation.methodAnswered)
       const requireAnnotationGeneration = Boolean(annotation?.confirmed && !annotation.generationSubmitted)
+      const requestedTool = requireSketchQuestion || requireAnnotationQuestion
+        ? ASK_USER_TOOL
+        : requireSketchGeneration || requireAnnotationGeneration
+          ? GENERATE_IMAGE_TOOL
+          : undefined
+      const loopTools = selectAgentLoopTools({
+        caps: mediaCaps,
+        custom: session.quality === 'custom',
+        selectedModelIds: selectedModelIds(session),
+        requiredTool: requestedTool,
+        registered: registeredModelToolsFor(registeredModels),
+      })
       emit({ type: 'status', status: 'thinking' })
       const toolAcc: Array<{
         index: number
@@ -1016,32 +1181,35 @@ async function runAgentLoopWithSnapshot(sessionId: string, emit: Emit, signal?: 
       let reasoning = ''
       try {
         await streamChat({
-          messages: sketchSubmitted
-            ? [...session.messages, { role: 'system', content: 'The confirmed Sketch to Image generation has already been submitted. Summarize its actual result only. Do not call tools or retry.' }]
-            : session.messages,
-          requiredTool: requireSketchQuestion || requireAnnotationQuestion
-            ? ASK_USER_TOOL
-            : requireSketchGeneration || requireAnnotationGeneration
-              ? GENERATE_IMAGE_TOOL
-              : undefined,
+          messages: visionSafeMessages(
+            sketchSubmitted
+              ? [...session.messages, { role: 'system', content: 'The confirmed Sketch to Image generation has already been submitted. Summarize its actual result only. Do not call tools or retry.' }]
+              : session.messages,
+            requireAnnotationGeneration || requireSketchGeneration,
+          ),
+          requiredTool: requiredToolIfListed(requestedTool, loopTools),
           disableTools: Boolean(sketch?.cancelled || sketchSubmitted),
-          tools: [
-            ...openAiTools.filter(tool => !((session.quality === 'custom' || selectedModelIds(session).length) && [GENERATE_IMAGE_TOOL, GENERATE_VIDEO_TOOL].includes(tool.function.name))),
-            ...registeredModelToolsFor(registeredModels),
-          ],
+          tools: loopTools,
           signal: llmSignal,
           onDelta: (delta) => {
             if (sessionWantsStop(session))
               return
-            if (delta.content) {
+            if (delta.content)
               text += delta.content
-              if (!requireSketchQuestion && !requireAnnotationQuestion)
-                emit({ type: 'text', delta: delta.content })
-            }
             if (delta.reasoning)
               reasoning += delta.reasoning
             if (delta.toolCalls?.length)
               toolAcc.push(...delta.toolCalls)
+            if (!delta.content && !delta.reasoning)
+              return
+            const hideAnswer = requireSketchQuestion || requireAnnotationQuestion
+            const event = visibleAssistantStreamEvent({
+              reasoning,
+              text: hideAnswer ? '' : text,
+              contentDelta: hideAnswer ? '' : (delta.content || ''),
+            })
+            if (event)
+              emit({ type: event.type, delta: event.delta })
           },
         })
       }
@@ -1110,7 +1278,7 @@ async function runAgentLoopWithSnapshot(sessionId: string, emit: Emit, signal?: 
         return
       }
       // Do not pass the loop abort into generation — already started jobs should finish.
-      const paused = await dispatchToolCalls(sessionId, toolCalls, emit, undefined)
+      const paused = await dispatchToolCalls(sessionId, toolCalls, emit, undefined, mediaCaps)
       if (sessionWantsStop(session)) {
         noteAgentStopped(session, emit)
         return
@@ -1148,6 +1316,24 @@ function parseAttachmentUrls(value: unknown) {
     throw new Error('A maximum of 16 attached images is allowed')
   return urls
 }
+function visionSafeMessages(messages: ChatMessage[], stripVision: boolean): ChatMessage[] {
+  if (!stripVision)
+    return messages
+  return messages.map((message) => {
+    if (!Array.isArray(message.content))
+      return message
+    const content = message.content.filter(part => part.type !== 'image_url')
+    if (content.length)
+      return { ...message, content }
+    if (!message.content.length)
+      return message
+    return {
+      ...message,
+      content: [{ type: 'text', text: 'Attached stills are listed in the text. Use those URLs in generate_image.' }],
+    }
+  })
+}
+
 function userMessageContent(text: string, attachments: string[]): string | UserContentPart[] {
   if (!attachments.length)
     return text
@@ -1275,7 +1461,12 @@ export async function handleChat(message: string, sessionId: string | undefined,
     emit({ type: 'done' })
   }
 }
-function storedVideoArgs(argsJson: string, images: ReturnType<typeof requireSession>['images'], params?: ConfirmBody['params']): ResolvedGenerateVideo {
+function storedVideoArgs(
+  argsJson: string,
+  images: ReturnType<typeof requireSession>['images'],
+  params?: ConfirmBody['params'],
+  caps?: AgentMediaCapabilities,
+): ResolvedGenerateVideo {
   const previous = JSON.parse(argsJson) as Record<string, unknown>
   const args = parseGenerateVideoArgs(JSON.stringify({
     name: previous.name,
@@ -1289,10 +1480,93 @@ function storedVideoArgs(argsJson: string, images: ReturnType<typeof requireSess
     reference_images: previous.reference_images || previous.reference_image_urls || [],
     reference_videos: previous.reference_videos || previous.reference_video_urls || [],
     family: parseVideoFamily(previous.family),
-  }))
-  return resolveGenerateVideoArgs(clampVideoToFamily(args, args.family), images)
+  }), caps)
+  return resolveGenerateVideoArgs(clampVideoToFamily(args, args.family, caps), images, caps)
 }
-async function runConfirmedItems(sessionId: string, items: PendingToolItem[], body: ConfirmBody, emit: Emit, signal?: AbortSignal) {
+
+async function validatePendingWithCapabilities(
+  session: AgentSession,
+  items: PendingToolItem[],
+  caps: AgentMediaCapabilities,
+) {
+  for (const item of items) {
+    if (findAgentModelTool(item.tool)) {
+      const args = JSON.parse(item.argsJson) as ModelGeneration
+      const model = AGENT_MODELS.find(entry => entry.id === args.modelId)
+      if (!model)
+        throw new Error(`Unknown Agent model: ${args.modelId}`)
+      await resolveAgentGenerationSpec(model, args.input, caps)
+    }
+    if (item.tool === GENERATE_IMAGE_TOOL) {
+      const args = resolveGenerateImageArgs(parseGenerateImageArgs(item.argsJson, caps), session.images)
+      await preparePresetImage(args, caps)
+    }
+    if (item.tool === GENERATE_VIDEO_TOOL) {
+      const parsed = parseGenerateVideoArgs(item.argsJson, caps)
+      const args = resolveGenerateVideoArgs(clampVideoToFamily(parsed, parsed.family, caps), session.images, caps)
+      await preparePresetVideo(args, caps)
+    }
+  }
+}
+
+async function requeuePendingForCapabilities(
+  session: AgentSession,
+  pending: NonNullable<AgentSession['pendingConfirmation']>,
+  liveCaps: AgentMediaCapabilities,
+  emit: Emit,
+) {
+  session.pendingConfirmation = null
+  try {
+    await validatePendingWithCapabilities(session, pending.items, liveCaps)
+    queueGenerationWork(session.id, pending.items, emit, liveCaps, true)
+  }
+  catch (error) {
+    const fallback = capabilityRequeueFallback(pending.items, liveCaps, error)
+    if (fallback.action === 'ask_user') {
+      for (const item of pending.items) {
+        appendToolResult(session.id, item.toolCallId, JSON.stringify({
+          ok: false,
+          failCode: 'MEDIA_CAPABILITIES_CHANGED',
+          error: 'Media capabilities changed. Choose Agnes-compatible settings.',
+          incompatibleFields: fallback.args.questions.map(question => question.id),
+        }))
+      }
+      const toolCallId = `call_caps_${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`
+      session.messages.push({
+        role: 'assistant',
+        content: null,
+        tool_calls: [{
+          id: toolCallId,
+          type: 'function',
+          function: {
+            name: ASK_USER_TOOL,
+            arguments: JSON.stringify(fallback.args),
+          },
+        }],
+      })
+      queueAskUser(session.id, [{ toolCallId, args: fallback.args }], emit)
+      touch(session)
+      return
+    }
+    for (const item of pending.items) {
+      appendToolResult(session.id, item.toolCallId, JSON.stringify({
+        ok: false,
+        failCode: fallback.failCode,
+        error: fallback.message,
+      }))
+    }
+  }
+  touch(session)
+}
+
+async function runConfirmedItems(
+  sessionId: string,
+  items: PendingToolItem[],
+  body: ConfirmBody,
+  emit: Emit,
+  signal?: AbortSignal,
+  caps?: AgentMediaCapabilities,
+) {
   const session = requireSession(sessionId)
   const confirmedCallIds = new Set(items.map(item => item.toolCallId))
   const sameTool = items.every(item => item.tool === items[0]?.tool)
@@ -1328,14 +1602,14 @@ async function runConfirmedItems(sessionId: string, items: PendingToolItem[], bo
         reference_images: previous.reference_images || [],
         uncertain_fields: [],
         reason: '',
-      }))
+      }), caps)
       images.push({ toolCallId: item.toolCallId, args: resolveGenerateImageArgs(args, session.images) })
       continue
     }
     if (tool === GENERATE_VIDEO_TOOL) {
       videos.push({
         toolCallId: item.toolCallId,
-        args: storedVideoArgs(item.argsJson, session.images, items.length === 1 ? applyParams : undefined),
+        args: storedVideoArgs(item.argsJson, session.images, items.length === 1 ? applyParams : undefined, caps),
       })
       continue
     }
@@ -1347,8 +1621,8 @@ async function runConfirmedItems(sessionId: string, items: PendingToolItem[], bo
       if (AGENT_MODELS.find(model => model.id === job.args.modelId)?.category === 'Image')
         inspectGeneratedStills(sessionId, successfulUrls([result]))
     }),
-    runGenerations(sessionId, images, emit, signal),
-    runVideos(sessionId, videos, emit, signal),
+    runGenerations(sessionId, images, emit, signal, caps),
+    runVideos(sessionId, videos, emit, signal, caps),
   ])
   return session.images.some(image =>
     confirmedCallIds.has(image.id)
@@ -1369,6 +1643,16 @@ export async function handleConfirm(sessionId: string, body: ConfirmBody, emit: 
   const pending = session.pendingConfirmation
   if (!pending || pending.payload.id !== body.confirmationId)
     throw new Error('No matching confirmation')
+  const liveCaps = sessionCaps(session)
+  if (
+    body.action === 'confirm'
+    && pending.caps
+    && pending.caps.fingerprint !== liveCaps.fingerprint
+  ) {
+    await requeuePendingForCapabilities(session, pending, liveCaps, emit)
+    emit({ type: 'done' })
+    return
+  }
   if (body.action === 'confirm' && confirmationAlreadyStarted(session, pending.items)) {
     session.pendingConfirmation = null
     touch(session)
@@ -1382,7 +1666,7 @@ export async function handleConfirm(sessionId: string, body: ConfirmBody, emit: 
   touch(session)
   try {
     if (body.action === 'confirm') {
-      session.retryBlocked = await runConfirmedItems(session.id, pending.items, body, emit, signal)
+      session.retryBlocked = await runConfirmedItems(session.id, pending.items, body, emit, signal, pending.caps)
       touch(session)
       if (sessionWantsStop(session))
         noteAgentStopped(session, emit)
@@ -1525,10 +1809,9 @@ export async function handleChoice(sessionId: string, body: ChoiceBody, emit: Em
     }
     session.pendingChoice = null
     const preference = modelPreferenceFromChoice(pending.payload, body)
-    if (preference) {
-      session.quality = preference
+    const picked = applyMediaFamilyChoice(session, pending.payload, body)
+    if (preference || picked.quality || picked.imageFamily || picked.videoFamily)
       refreshSessionPrompt(session)
-    }
     for (const item of pending.items)
       appendToolResult(session.id, item.toolCallId, result)
     const sketch = sketchBrief(session.messages)

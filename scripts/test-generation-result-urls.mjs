@@ -4,6 +4,10 @@ import {
   excludeInputResultUrls,
   generationResultUrls,
   mergeSourceUrls,
+  publicHttpImageUrl,
+  publicHttpsImageUrl,
+  publicOriginUrlFromJob,
+  publicOriginUrlsFromJobs,
   toPublicJob,
 } from '../server/utils/generationResults.ts'
 
@@ -76,6 +80,105 @@ test('session recovery sees one output URL so it does not create _1/_2 echo imag
     url,
   }))
   assert.deepEqual(sessionIds, [{ id: 'call_battle', url: battle }])
+})
+
+test('archived generation results expose a public origin URL for remote-url vision', () => {
+  const archived = job({
+    resultUrls: [battle],
+    sourceUrls: ['https://cdn.example/battle.jpg'],
+    resultAssets: [{
+      sourceUrl: 'https://cdn.example/battle.jpg',
+      localUrl: battle,
+      localKey: 'generator/results/agent_call_battle/2.jpg',
+      contentType: 'image/jpeg',
+      status: 'uploaded',
+      error: '',
+    }],
+  })
+  assert.equal(publicOriginUrlFromJob(archived, battle), 'https://cdn.example/battle.jpg')
+  assert.equal(publicOriginUrlFromJob(archived, `http://localhost:3001${battle}`), 'https://cdn.example/battle.jpg')
+  assert.deepEqual(generationResultUrls(archived), [battle])
+})
+
+test('uploads, missing assets, loopback origins, and videos have no public origin', () => {
+  const upload = '/media/uploads/still.png'
+  assert.equal(publicOriginUrlFromJob(job({
+    resultUrls: [upload],
+    resultAssets: [{
+      sourceUrl: upload,
+      localUrl: upload,
+      localKey: 'uploads/still.png',
+      contentType: 'image/png',
+      status: 'uploaded',
+      error: '',
+    }],
+  }), upload), '')
+  assert.equal(publicOriginUrlFromJob(job({
+    resultUrls: [battle],
+    resultAssets: [],
+  }), battle), '')
+  assert.equal(publicOriginUrlFromJob(job({
+    resultUrls: [battle],
+    resultAssets: [{
+      sourceUrl: 'http://127.0.0.1/out.png',
+      localUrl: battle,
+      localKey: 'generator/results/agent_call_battle/2.jpg',
+      contentType: 'image/jpeg',
+      status: 'uploaded',
+      error: '',
+    }],
+  }), battle), '')
+  assert.equal(publicOriginUrlFromJob(job({
+    category: 'Video',
+    resultUrls: [battle],
+    resultAssets: [{
+      sourceUrl: 'https://cdn.example/out.mp4',
+      localUrl: battle,
+      localKey: 'generator/results/agent_call_battle/2.jpg',
+      contentType: 'video/mp4',
+      status: 'uploaded',
+      error: '',
+    }],
+  }), battle), '')
+  assert.equal(publicOriginUrlFromJob(job({
+    deleted: true,
+    resultUrls: [battle],
+    resultAssets: [{
+      sourceUrl: 'https://cdn.example/battle.jpg',
+      localUrl: battle,
+      localKey: 'generator/results/agent_call_battle/2.jpg',
+      contentType: 'image/jpeg',
+      status: 'uploaded',
+      error: '',
+    }],
+  }), battle), '')
+  assert.equal(publicHttpImageUrl('https://user:pass@cdn.example/image.png'), '')
+  assert.equal(publicHttpsImageUrl('https://cdn.example/image.png'), 'https://cdn.example/image.png')
+  assert.equal(publicHttpsImageUrl('http://cdn.example/image.png'), '')
+  assert.equal(publicHttpsImageUrl('/media/generator/results/job/0.png'), '')
+})
+
+test('publicOriginUrlsFromJobs batch-maps locals including localhost aliases', () => {
+  const archived = job({
+    resultUrls: [battle],
+    sourceUrls: ['https://cdn.example/battle.jpg'],
+    resultAssets: [{
+      sourceUrl: 'https://cdn.example/battle.jpg',
+      localUrl: battle,
+      localKey: 'generator/results/agent_call_battle/2.jpg',
+      contentType: 'image/jpeg',
+      status: 'uploaded',
+      error: '',
+    }],
+  })
+  const mapped = publicOriginUrlsFromJobs([archived], [
+    battle,
+    `http://localhost:3001${battle}`,
+    '/media/uploads/still.png',
+  ])
+  assert.equal(mapped.get(battle), 'https://cdn.example/battle.jpg')
+  assert.equal(mapped.get(`http://localhost:3001${battle}`), 'https://cdn.example/battle.jpg')
+  assert.equal(mapped.has('/media/uploads/still.png'), false)
 })
 
 test('excludeInputResultUrls also honors extra source/input URL lists used by persist', () => {

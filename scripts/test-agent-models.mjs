@@ -41,6 +41,7 @@ const api = load('shared/utils/agentModels.ts', {
     AI_MODELS: models,
     MODEL_COMPANIES: { 'Seedream 5.0 Pro': 'ByteDance', 'Seedance 2.0': 'ByteDance' },
     COMPANY_LOGOS: { ByteDance: '/brand/companies/bytedance.svg' },
+    canonicalizeAgnesImageModelId: id => String(id || '').replace('image-2.0-flash', 'image-2.5-flash'),
   },
 })
 

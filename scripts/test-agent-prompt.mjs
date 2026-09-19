@@ -127,3 +127,56 @@ test('historical foreign-language media remains data with stable IDs and URLs', 
   assert.ok(prompt.includes(media.id) && prompt.includes(media.url) && prompt.includes(media.name))
   assert.doesNotMatch(withoutReferenceTokens(prompt.split('## Session media')[0]), /\p{Script=Han}/u)
 })
+
+test('media capability prompt does not mix Agnes and Ark preset rules', () => {
+  const agnesCaps = {
+    arkOk: false,
+    agnesOk: true,
+    presetImage: 'agnes',
+    presetVideo: 'agnes',
+    fingerprint: 'ark:false|agnes:true',
+  }
+  const arkCaps = {
+    arkOk: true,
+    agnesOk: true,
+    presetImage: 'ark',
+    presetVideo: 'ark',
+    fingerprint: 'ark:true|agnes:true',
+  }
+  const agnesGlobal = systemPrompt('always', 'en', agnesCaps).split('## Skills')[0]
+  const arkGlobal = systemPrompt('always', 'en', arkCaps).split('## Skills')[0]
+
+  assert.match(agnesGlobal, /Agnes Video 2\.5 Flash at 720p/)
+  assert.doesNotMatch(agnesGlobal, /always use aspect_ratio adaptive/)
+  assert.doesNotMatch(agnesGlobal, /Default duration 5, generate_audio true/)
+  assert.doesNotMatch(agnesGlobal, /Image-to-video stays adaptive/)
+  assert.doesNotMatch(agnesGlobal, /default 480p/)
+  assert.doesNotMatch(agnesGlobal, /runtime selects Seedance 2/)
+
+  assert.match(arkGlobal, /always use aspect_ratio adaptive/)
+  assert.match(arkGlobal, /Default duration 5, generate_audio true/)
+  assert.match(arkGlobal, /runtime selects Seedance 2/)
+
+  const agnesFull = systemPrompt('always', 'en', agnesCaps)
+  const overrideIndex = agnesFull.indexOf('## Active preset override')
+  const skillIndex = agnesFull.indexOf('# Long-form video')
+  assert.ok(skillIndex >= 0 && overrideIndex > skillIndex)
+  assert.match(agnesFull, /Those Seedance rules are inactive while preset video is Agnes/)
+  assert.doesNotMatch(systemPrompt('always', 'en', arkCaps), /Active preset override/)
+})
+
+test('Agnes image preference is independent from Ark video', () => {
+  const mixed = systemPrompt('always', 'en', {
+    arkOk: true,
+    agnesOk: true,
+    presetImage: 'agnes',
+    presetVideo: 'ark',
+    fingerprint: 'ark:true|agnes:true|img:agnes-image|vid:ark-video',
+  }).split('## Skills')[0]
+  assert.match(mixed, /Agnes Image 2\.5 Flash/)
+  assert.match(mixed, /runtime selects the Agnes text-to-image/)
+  assert.doesNotMatch(mixed, /stills with Ark Seedream/)
+  assert.doesNotMatch(mixed, /runtime selects the Seedream/)
+  assert.match(mixed, /always use aspect_ratio adaptive/)
+  assert.match(mixed, /runtime selects Seedance 2/)
+})

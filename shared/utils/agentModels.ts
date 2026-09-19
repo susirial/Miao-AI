@@ -1,5 +1,5 @@
 import type { AiModelConfig, SchemaProperty } from '../types/aiModel'
-import { AI_MODELS, COMPANY_LOGOS, MODEL_COMPANIES } from '../constants/aiModels'
+import { AI_MODELS, COMPANY_LOGOS, MODEL_COMPANIES, canonicalizeAgnesImageModelId } from '../constants/aiModels'
 
 // One catalog for the composer, model tools, validation metadata.
 export const AGENT_MODELS: AiModelConfig[] = [...AI_MODELS]
@@ -17,7 +17,7 @@ export function modelMention(model: AiModelConfig) {
   return `@[${model.name} · ${model.task}](model:${model.id})`
 }
 export function readModelMentions(text: string) {
-  return [...new Set([...text.matchAll(/@\[[^\]]+\]\(model:([^\s)]+)\)/g)].map(match => match[1]!))]
+  return [...new Set([...text.matchAll(/@\[[^\]]+\]\(model:([^\s)]+)\)/g)].map(match => canonicalizeAgnesImageModelId(match[1]!)))]
     .filter(id => AGENT_MODELS.some(model => model.id === id))
 }
 export function stripModelMentions(text: string) {

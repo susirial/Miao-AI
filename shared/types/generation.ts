@@ -1,6 +1,6 @@
 export type GenerationJobState = 'queued' | 'waiting' | 'queuing' | 'generating' | 'moderating' | 'archiving' | 'success' | 'fail'
 
-export type GenerationProvider = 'ark-image' | 'ark-video' | 'local'
+export type GenerationProvider = 'agnes-image' | 'agnes-video' | 'ark-image' | 'ark-video' | 'local'
 
 export const GENERATION_ACTIVE_STATES = ['waiting', 'queuing', 'generating', 'moderating', 'archiving'] as const
 export const GENERATION_NON_RETRYABLE_FAIL_CODES = ['submission_unknown'] as const

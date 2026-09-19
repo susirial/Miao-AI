@@ -34,8 +34,10 @@ function harness() {
   })
   const registry = load('server/ai/media/registry.ts', {
     '../../utils/generationJobs': {
-      generationProvider: job => ['ark-image', 'ark-video', 'local'].includes(job.provider) ? job.provider : undefined,
+      generationProvider: job => ['agnes-image', 'agnes-video', 'ark-image', 'ark-video', 'local'].includes(job.provider) ? job.provider : undefined,
     },
+    './agnesImage': { agnesImageBackend: backend('agnes-image') },
+    './agnesVideo': { agnesVideoBackend: backend('agnes-video') },
     './arkImage': { arkImageBackend: backend('ark-image') },
     './arkVideo': { arkVideoBackend: backend('ark-video') },
   })
@@ -52,17 +54,21 @@ function job(provider) {
   }
 }
 
-test('registry routes image and video jobs only to Ark adapters', async () => {
+test('registry routes jobs to Ark and Agnes media adapters', async () => {
   const { registry, calls } = harness()
   assert.equal((await registry.startMediaBackend(job('ark-image'))).providerTaskId, 'ark-image-task')
+  assert.equal((await registry.startMediaBackend(job('agnes-image'))).providerTaskId, 'agnes-image-task')
   await registry.syncMediaBackend(job('ark-video'))
+  await registry.syncMediaBackend(job('agnes-video'))
   await registry.removeMediaBackend(job('ark-video'))
   assert.deepEqual(calls, [
     ['start', 'ark-image', 'ark-image'],
+    ['start', 'agnes-image', 'agnes-image'],
     ['sync', 'ark-video', 'ark-video'],
+    ['sync', 'agnes-video', 'agnes-video'],
     ['remove', 'ark-video', 'ark-video'],
   ])
-  assert.deepEqual(Object.keys(registry.MEDIA_BACKENDS).sort(), ['ark-image', 'ark-video', 'local'])
+  assert.deepEqual(Object.keys(registry.MEDIA_BACKENDS).sort(), ['agnes-image', 'agnes-video', 'ark-image', 'ark-video', 'local'])
 })
 
 test('unknown or providerless jobs fail closed instead of selecting a backend', async () => {

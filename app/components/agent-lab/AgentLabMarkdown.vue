@@ -34,16 +34,16 @@ const html = computed(() => {
 
 <template>
   <div class="agent-lab-md text-sm leading-6" @click="onLinkClick" @auxclick="onLinkClick">
-    <details v-if="thinking" class="mb-1 text-muted-foreground">
+    <details v-if="thinking" class="mb-1 text-muted-foreground" :open="streaming || undefined">
       <summary class="cursor-pointer text-xs font-medium">
         Thinking
       </summary>
       <div class="mt-2 whitespace-pre-wrap text-xs leading-5">
-        {{ thinking }}
+        {{ thinking }}<span v-if="streaming" class="ms-0.5 inline-block size-1.5 rounded-full bg-current align-middle opacity-70" />
       </div>
     </details>
     <div v-if="html" v-html="html" />
-    <span v-if="streaming" class="ms-0.5 inline-block size-1.5 rounded-full bg-current align-middle opacity-70" />
+    <span v-if="streaming && !thinking" class="ms-0.5 inline-block size-1.5 rounded-full bg-current align-middle opacity-70" />
   </div>
 </template>
 

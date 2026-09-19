@@ -1,6 +1,8 @@
 import type { GenerationProvider } from '../../../shared/types/generation'
 import type { MediaBackend, MediaBackendStartResult, MediaJobDocument } from './types'
 import { generationProvider } from '../../utils/generationJobs'
+import { agnesImageBackend } from './agnesImage'
+import { agnesVideoBackend } from './agnesVideo'
 import { arkImageBackend } from './arkImage'
 import { arkVideoBackend } from './arkVideo'
 
@@ -18,6 +20,8 @@ const localMediaBackend: MediaBackend = {
 }
 
 export const MEDIA_BACKENDS: Partial<Record<GenerationProvider, MediaBackend>> = {
+  'agnes-image': agnesImageBackend,
+  'agnes-video': agnesVideoBackend,
   'ark-image': arkImageBackend,
   'ark-video': arkVideoBackend,
   'local': localMediaBackend,

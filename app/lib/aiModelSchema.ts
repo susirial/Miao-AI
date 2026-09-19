@@ -10,6 +10,7 @@ import type {
 
 const TOOLBAR_FIELD_KEYS = new Set([
   'aspect_ratio',
+  'ratio',
   'resolution',
   'quality',
   'duration',
@@ -90,6 +91,9 @@ function resolvePlacement(key: string, property: SchemaProperty): FieldPlacement
 }
 
 function resolveWidget(key: string, property: SchemaProperty, placement: FieldPlacement): FieldWidget {
+  if (property['x-ui-component'] === 'url-list')
+    return 'url-list'
+
   if (property['x-ui-component'] === 'uploaders' || UPLOAD_FIELD_KEYS.has(key))
     return 'upload'
 
@@ -118,11 +122,10 @@ function resolveWidget(key: string, property: SchemaProperty, placement: FieldPl
 }
 
 function resolveDefaultValue(key: string, property: SchemaProperty, widget: FieldWidget) {
-
   if (property.default !== undefined)
     return property.default
 
-  if (widget === 'upload')
+  if (widget === 'upload' || widget === 'url-list')
     return []
 
   if (widget === 'switch')
@@ -186,7 +189,7 @@ export function mergePreservedValues(
     if (key === 'prompt' && typeof value === 'string' && value.trim())
       merged[key] = value
 
-    if (field.widget === 'upload' && Array.isArray(value) && value.length)
+    if ((field.widget === 'upload' || field.widget === 'url-list') && Array.isArray(value) && value.length)
       merged[key] = value
   }
 
@@ -206,6 +209,9 @@ export function isFormValid(fields: FieldConfig[], values: AiFormValues) {
 
     if (field.widget === 'upload')
       return Array.isArray(value) && value.length > 0
+
+    if (field.widget === 'url-list')
+      return Array.isArray(value) && value.some(entry => typeof entry === 'string' && entry.trim().length > 0)
 
     if (typeof value === 'string')
       return value.trim().length > 0

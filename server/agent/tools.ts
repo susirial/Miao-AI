@@ -1,3 +1,4 @@
+import type { AgentMediaCapabilities } from './mediaModels'
 import type {
   AgentImage,
   AskUserArgs,
@@ -10,9 +11,10 @@ import type {
   UncertainField,
   VideoFamily,
 } from './types'
-import { SEEDREAM_5_ASPECT_RATIOS, SEEDREAM_5_RESOLUTIONS } from '~~/shared/constants/aiModels'
+import { AGNES_IMAGE_RATIOS, AGNES_IMAGE_SIZE_TIERS, AGNES_VIDEO_ASPECT_RATIOS, SEEDREAM_5_ASPECT_RATIOS, SEEDREAM_5_RESOLUTIONS } from '~~/shared/constants/aiModels'
 import { withCustomChoiceOption } from '~~/shared/utils/agentChoices'
-import { canonicalMediaUrl } from '../utils/storedMediaUrl.mjs'
+import { agnesPublicImageRequiredError } from '../utils/agnesVideoUrls'
+import { canonicalMediaUrl, storedMediaKey } from '../utils/storedMediaUrl.mjs'
 import { exportZipTool } from './exportZip'
 import { isSeedance2AspectRatio, isSeedance2Resolution } from './seedance2'
 import { AGENT_VIDEO_DURATIONS, SEEDANCE_2_ASPECT_RATIOS, SEEDANCE_2_RESOLUTIONS, UNCERTAIN_FIELDS } from './types'
@@ -229,6 +231,76 @@ export const openAiTools = [
   },
 ]
 
+export function requiredToolIfListed(requiredTool: string | undefined, tools: Array<{ function?: { name?: string } }>) {
+  if (!requiredTool)
+    return undefined
+  return tools.some(tool => tool.function?.name === requiredTool) ? requiredTool : undefined
+}
+
+export function selectAgentLoopTools(options: {
+  caps: AgentMediaCapabilities
+  custom?: boolean
+  selectedModelIds?: string[]
+  requiredTool?: string
+  registered?: Array<{ type: 'function', function: { name: string } }>
+}) {
+  const hidePresetMedia = options.requiredTool !== GENERATE_IMAGE_TOOL
+    && options.requiredTool !== GENERATE_VIDEO_TOOL
+    && (Boolean(options.custom) || Boolean(options.selectedModelIds?.length))
+  const tools = [
+    ...buildOpenAiTools(options.caps).filter(tool => !(hidePresetMedia && [GENERATE_IMAGE_TOOL, GENERATE_VIDEO_TOOL].includes(tool.function.name))),
+    ...(options.registered || []),
+  ]
+  if (requiredToolIfListed(options.requiredTool, tools))
+    return tools
+  if (options.requiredTool !== GENERATE_IMAGE_TOOL && options.requiredTool !== GENERATE_VIDEO_TOOL && options.requiredTool !== ASK_USER_TOOL)
+    return tools
+  const extras = buildOpenAiTools({
+    ...options.caps,
+    presetImage: options.requiredTool === GENERATE_IMAGE_TOOL && options.caps.presetImage === 'unavailable' ? 'ark' : options.caps.presetImage,
+    presetVideo: options.requiredTool === GENERATE_VIDEO_TOOL && options.caps.presetVideo === 'unavailable' ? 'ark' : options.caps.presetVideo,
+  })
+  const extra = extras.find(tool => tool.function.name === options.requiredTool)
+  return extra ? [extra, ...tools] : tools
+}
+
+export function buildOpenAiTools(caps: AgentMediaCapabilities) {
+  const tools = JSON.parse(JSON.stringify(openAiTools)) as typeof openAiTools
+  const available = tools.filter((tool) => {
+    if (tool.function.name === GENERATE_IMAGE_TOOL)
+      return caps.presetImage !== 'unavailable'
+    if (tool.function.name === GENERATE_VIDEO_TOOL)
+      return caps.presetVideo !== 'unavailable'
+    return true
+  })
+  if (caps.presetImage === 'agnes') {
+    const image = available.find(tool => tool.function.name === GENERATE_IMAGE_TOOL)
+    const properties = image?.function.parameters.properties as Record<string, { description?: string, enum?: string[] }> | undefined
+    if (properties?.aspect_ratio) {
+      properties.aspect_ratio.enum = [...AGNES_IMAGE_RATIOS]
+      properties.aspect_ratio.description = 'Agnes Image 2.5 Flash ratios: 1:1, 3:4, 4:3, 16:9, 9:16, 2:3, 3:2, 21:9. Default 1:1. Do not use auto.'
+    }
+    if (properties?.resolution) {
+      properties.resolution.enum = [...AGNES_IMAGE_SIZE_TIERS]
+      properties.resolution.description = 'Agnes Image 2.5 Flash size tiers: 1K, 2K, 3K, 4K. Economy/Hobby default to 1K; high quality uses 2K.'
+    }
+  }
+  if (caps.presetVideo !== 'agnes')
+    return available
+  const video = available.find(tool => tool.function.name === GENERATE_VIDEO_TOOL)
+  if (!video)
+    return available
+  const properties = video.function.parameters.properties as Record<string, { description?: string }>
+  delete properties.generate_audio
+  if (properties.resolution)
+    properties.resolution.description = 'Agnes Video 2.5 Flash uses 720p. Omit this field unless the user explicitly asks for 720p.'
+  if (properties.aspect_ratio)
+    properties.aspect_ratio.description = 'Use one of 21:9, 16:9, 4:3, 1:1, 3:4, or 9:16. Text-to-video and reference-to-video default to 16:9. For image-to-video, omit aspect_ratio only when you also mark it uncertain; do not treat 16:9 as already chosen.'
+  if (properties.duration)
+    properties.duration.description = 'Length in seconds from 4 through 12. Default 5.'
+  return available
+}
+
 function asString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -275,7 +347,14 @@ export function resolveSessionUrl(token: string, images: AgentImage[], label: st
   }
 }
 
-export function parseGenerateImageArgs(raw: string): GenerateImageArgs {
+export function mediaProviderNotReadyError() {
+  return Object.assign(
+    new Error('Configure and test the selected media provider in Service connection before using this media tool.'),
+    { failCode: 'MEDIA_PROVIDER_NOT_READY' as const },
+  )
+}
+
+export function parseGenerateImageArgs(raw: string, caps?: AgentMediaCapabilities): GenerateImageArgs {
   let parsed: Record<string, unknown>
   try {
     parsed = JSON.parse(raw) as Record<string, unknown>
@@ -283,6 +362,8 @@ export function parseGenerateImageArgs(raw: string): GenerateImageArgs {
   catch {
     throw new Error('generate_image arguments were not valid JSON')
   }
+  if (caps?.presetImage === 'unavailable')
+    throw mediaProviderNotReadyError()
 
   const prompt = asString(parsed.prompt)
   if (!prompt)
@@ -291,11 +372,13 @@ export function parseGenerateImageArgs(raw: string): GenerateImageArgs {
     throw new Error('prompt must be 20000 characters or fewer')
 
   const aspectRatio = asString(parsed.aspect_ratio) || '1:1'
-  if (!(SEEDREAM_5_ASPECT_RATIOS as readonly string[]).includes(aspectRatio))
+  const allowedRatios = caps?.presetImage === 'agnes' ? AGNES_IMAGE_RATIOS : SEEDREAM_5_ASPECT_RATIOS
+  if (!(allowedRatios as readonly string[]).includes(aspectRatio))
     throw new Error(`Invalid aspect_ratio: ${aspectRatio}`)
 
   const resolution = asString(parsed.resolution) || '1K'
-  if (!(SEEDREAM_5_RESOLUTIONS as readonly string[]).includes(resolution))
+  const allowedResolutions = caps?.presetImage === 'agnes' ? AGNES_IMAGE_SIZE_TIERS : SEEDREAM_5_RESOLUTIONS
+  if (!(allowedResolutions as readonly string[]).includes(resolution))
     throw new Error(`Invalid resolution: ${resolution}`)
 
   const uncertain = Array.isArray(parsed.uncertain_fields)
@@ -395,7 +478,7 @@ export function resolveSessionVideo(token: string, images: AgentImage[], label: 
   }
 }
 
-export function parseGenerateVideoArgs(raw: string): GenerateVideoArgs {
+export function parseGenerateVideoArgs(raw: string, caps?: AgentMediaCapabilities): GenerateVideoArgs {
   let parsed: Record<string, unknown>
   try {
     parsed = JSON.parse(raw) as Record<string, unknown>
@@ -403,6 +486,8 @@ export function parseGenerateVideoArgs(raw: string): GenerateVideoArgs {
   catch {
     throw new Error('generate_video arguments were not valid JSON')
   }
+  if (caps?.presetVideo === 'unavailable')
+    throw mediaProviderNotReadyError()
 
   const prompt = asString(parsed.prompt)
   if (!prompt)
@@ -417,11 +502,16 @@ export function parseGenerateVideoArgs(raw: string): GenerateVideoArgs {
   const referenceImages = asStringList(parsed.reference_images ?? parsed.reference_image_urls, 30, 'reference_images')
   const referenceVideos = asStringList(parsed.reference_videos ?? parsed.reference_video_urls, 10, 'reference_videos')
   const hasRefs = Boolean(referenceImages.length || referenceVideos.length)
-  const aspectRatio = asString(parsed.aspect_ratio) || (firstFrame && !hasRefs ? 'adaptive' : '16:9')
+  const namedAspectRatio = asString(parsed.aspect_ratio)
+  const agnesI2vOmit = caps?.presetVideo === 'agnes' && Boolean(firstFrame) && !hasRefs && !namedAspectRatio
+  const aspectRatio = namedAspectRatio
+    || (caps?.presetVideo === 'agnes' ? '16:9' : firstFrame && !hasRefs ? 'adaptive' : '16:9')
   if (!isSeedance2AspectRatio(aspectRatio))
     throw new Error(`Invalid aspect_ratio: ${aspectRatio}`)
 
-  const resolutionRaw = asString(parsed.resolution) === '4K' ? '4k' : (asString(parsed.resolution) || '480p')
+  const resolutionRaw = asString(parsed.resolution) === '4K'
+    ? '4k'
+    : (asString(parsed.resolution) || (caps?.presetVideo === 'agnes' ? '720p' : '480p'))
   if (!isSeedance2Resolution(resolutionRaw))
     throw new Error('resolution must be 480p, 720p, 1080p, or 4k')
 
@@ -434,6 +524,8 @@ export function parseGenerateVideoArgs(raw: string): GenerateVideoArgs {
     ? parsed.uncertain_fields
         .filter((item): item is UncertainField => typeof item === 'string' && (UNCERTAIN_FIELDS as readonly string[]).includes(item))
     : []
+  if (agnesI2vOmit && !uncertain.includes('aspect_ratio'))
+    uncertain.push('aspect_ratio')
 
   return {
     name: asString(parsed.name).slice(0, 100),
@@ -441,7 +533,9 @@ export function parseGenerateVideoArgs(raw: string): GenerateVideoArgs {
     aspect_ratio: aspectRatio,
     resolution: resolutionRaw,
     duration,
-    generate_audio: parsed.generate_audio !== false,
+    ...(Object.hasOwn(parsed, 'generate_audio')
+      ? { generate_audio: parsed.generate_audio === true }
+      : caps?.presetVideo === 'agnes' ? {} : { generate_audio: true }),
     family,
     first_frame: firstFrame,
     last_frame: lastFrame,
@@ -451,14 +545,18 @@ export function parseGenerateVideoArgs(raw: string): GenerateVideoArgs {
   }
 }
 
-export function resolveGenerateVideoArgs(args: GenerateVideoArgs, images: AgentImage[]): ResolvedGenerateVideo {
+export function resolveGenerateVideoArgs(
+  args: GenerateVideoArgs,
+  images: AgentImage[],
+  caps?: AgentMediaCapabilities,
+): ResolvedGenerateVideo {
   const resolved: ResolvedGenerateVideo = {
     name: args.name,
     prompt: args.prompt,
     aspect_ratio: args.aspect_ratio,
     resolution: args.resolution,
     duration: args.duration,
-    generate_audio: args.generate_audio,
+    ...(args.generate_audio !== undefined ? { generate_audio: args.generate_audio } : {}),
     family: args.family,
     uncertain_fields: args.uncertain_fields,
   }
@@ -471,19 +569,128 @@ export function resolveGenerateVideoArgs(args: GenerateVideoArgs, images: AgentI
       resolved.reference_image_urls = referenceImages
     if (referenceVideos.length)
       resolved.reference_video_urls = referenceVideos
+    assertAgnesVideoPublicUrls(resolved, caps)
     return resolved
   }
 
   if (args.first_frame) {
     const first = resolveSessionUrl(args.first_frame, images, 'first_frame')
     resolved.first_frame_url = first.url
-    resolved.aspect_ratio = 'adaptive'
+    if (caps?.presetVideo !== 'agnes')
+      resolved.aspect_ratio = 'adaptive'
   }
 
   if (args.last_frame)
     resolved.last_frame_url = resolveSessionUrl(args.last_frame, images, 'last_frame').url
 
+  assertAgnesVideoPublicUrls(resolved, caps)
   return resolved
+}
+
+function isPublicHttpsUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && !url.username && !url.password
+  }
+  catch {
+    return false
+  }
+}
+
+function isAgnesAllowedVideoStill(url: string) {
+  return storedMediaKey(url) !== null || isPublicHttpsUrl(url)
+}
+
+function assertAgnesPublicHttps(url: string, label: string) {
+  if (!isAgnesAllowedVideoStill(url))
+    throw agnesPublicImageRequiredError(label)
+}
+
+function assertAgnesVideoPublicUrls(resolved: ResolvedGenerateVideo, caps?: AgentMediaCapabilities) {
+  if (caps?.presetVideo !== 'agnes')
+    return
+  if (resolved.first_frame_url)
+    assertAgnesPublicHttps(resolved.first_frame_url, 'first_frame')
+  if (resolved.last_frame_url)
+    assertAgnesPublicHttps(resolved.last_frame_url, 'last_frame')
+  for (const url of resolved.reference_image_urls || [])
+    assertAgnesPublicHttps(url, 'reference_images')
+  for (const url of resolved.reference_video_urls || [])
+    assertAgnesPublicHttps(url, 'reference_videos')
+}
+
+export type AgnesIncompatibleVideoField = 'resolution' | 'aspect_ratio' | 'generate_audio'
+
+export function agnesIncompatiblePresetVideoFields(raw: string | Record<string, unknown>): AgnesIncompatibleVideoField[] {
+  const parsed = typeof raw === 'string'
+    ? JSON.parse(raw) as Record<string, unknown>
+    : raw
+  const fields: AgnesIncompatibleVideoField[] = []
+  const resolution = asString(parsed.resolution).toLowerCase()
+  if (resolution && resolution !== '720p')
+    fields.push('resolution')
+  if (asString(parsed.aspect_ratio) === 'adaptive')
+    fields.push('aspect_ratio')
+  if (Object.hasOwn(parsed, 'generate_audio'))
+    fields.push('generate_audio')
+  return fields
+}
+
+export function buildAgnesCapabilityAskUser(fields: AgnesIncompatibleVideoField[]): AskUserArgs {
+  const questions: ChoiceQuestion[] = []
+  if (fields.includes('resolution')) {
+    questions.push({
+      id: 'resolution',
+      prompt: 'Agnes Video 2.5 Flash supports only 720p. Choose a resolution.',
+      recommendedId: '720p',
+      options: withCustomChoiceOption([{ id: '720p', label: '720p' }]),
+    })
+  }
+  if (fields.includes('aspect_ratio')) {
+    questions.push({
+      id: 'aspect_ratio',
+      prompt: 'Agnes Video 2.5 Flash does not support adaptive. Choose a fixed ratio.',
+      recommendedId: '16:9',
+      options: withCustomChoiceOption(AGNES_VIDEO_ASPECT_RATIOS.map(id => ({ id, label: id }))),
+    })
+  }
+  if (fields.includes('generate_audio')) {
+    questions.push({
+      id: 'generate_audio',
+      prompt: 'Agnes Video 2.5 Flash cannot guarantee audio on or off. Continue without an audio switch?',
+      recommendedId: 'omit',
+      options: withCustomChoiceOption([{ id: 'omit', label: 'Omit generate_audio' }]),
+    })
+  }
+  return {
+    prompt: 'The media backend changed. Agnes Video 2.5 Flash cannot use the previous settings.',
+    recommendation: 'Use 720p and a fixed ratio such as 16:9. Omit generate_audio.',
+    questions,
+  }
+}
+
+export function capabilityRequeueFallback(
+  items: Array<{ tool?: string, argsJson: string }>,
+  liveCaps: AgentMediaCapabilities,
+  error: unknown,
+): { action: 'ask_user', args: AskUserArgs } | { action: 'fail', failCode: string, message: string } {
+  const failCode = String((error as { failCode?: unknown })?.failCode || 'MEDIA_CAPABILITIES_CHANGED')
+  const message = error instanceof Error ? error.message : 'Media capabilities changed'
+  if (liveCaps.presetImage === 'unavailable' && liveCaps.presetVideo === 'unavailable') {
+    const notReady = mediaProviderNotReadyError()
+    return { action: 'fail', failCode: notReady.failCode, message: notReady.message }
+  }
+  if (failCode === 'MEDIA_PROVIDER_NOT_READY')
+    return { action: 'fail', failCode, message }
+
+  const fields = [...new Set(
+    items
+      .filter(item => item.tool === GENERATE_VIDEO_TOOL)
+      .flatMap(item => agnesIncompatiblePresetVideoFields(item.argsJson)),
+  )]
+  if (liveCaps.presetVideo === 'agnes' && fields.length)
+    return { action: 'ask_user', args: buildAgnesCapabilityAskUser(fields) }
+  return { action: 'fail', failCode, message }
 }
 
 export function parseConcatVideoArgs(raw: string): ConcatVideoArgs {

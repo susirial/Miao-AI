@@ -8,6 +8,6 @@ const logo = computed(() => model.value ? agentModelLogo(model.value) : '')
 </script>
 
 <template>
-  <img v-if="logo" :src="logo" alt="" class="size-4 shrink-0 object-contain">
+  <img v-if="logo" :src="logo" alt="" class="h-4 w-auto max-w-10 shrink-0 object-contain">
   <Icon v-else :name="model?.icon || 'lucide:boxes'" class="size-4 shrink-0" aria-hidden="true" />
 </template>

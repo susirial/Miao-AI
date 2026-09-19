@@ -33,19 +33,29 @@
 
 | | 含义 | 在产品里 |
 | --- | --- | --- |
-| **M** | 大模型 | 文本、生图、视频等模型：GLM、DeepSeek、豆包、Seedream、Seedance，并持续接入 |
+| **M** | 大模型 | 文本、生图、视频等模型：Agnes、GLM、DeepSeek、豆包、Seedream、Seedance，并持续接入 |
 | **I** | 智能 | Agent 会规划、确认关键选择，并执行多步制作 |
 | **A** | 创作助手 | 对话 + 无限画布，而不是一个提示词输入框 |
 | **O** | 开放 | MIT 开源、本地运行、自带 Key |
 
 ## 为什么用喵 AI
 
-- **大模型在同一条对话里。** 用 `@` 指定 GLM 5.3、DeepSeek、豆包 Seed、Seedream 5 或 Seedance 2，不必跳出工作流。
+- **大模型在同一条对话里。** 用 `@` 指定 Agnes 2.5 Flash、GLM 5.3、DeepSeek、豆包 Seed、Seedream 5 或 Seedance 2，不必跳出工作流。
 - **智能会把事情做完。** Agent 把一句话变成分镜、静帧或视频，并继续和你一起改。
 - **创作助手，不是聊天窗口。** 每个结果留在画布上，方便比较、复用和导出。
 - **开放，且在你的机器上。** Web 与 macOS 桌面；数据在本地 SQLite；没有喵 AI 云。
 
 ## 更新记录
+
+### 2026-09-19 — Agnes 模型与生图 / 生视频选择
+
+服务连接现可分别选择文本、生图、生视频模型。首页卡片会打开对应 Generator 模型；用 `@` 或深链指定的模型不会被已保存的媒体族偏好覆盖。
+
+- **文本：** Agnes 2.5 Flash、Agnes 3.0 Flash
+- **生图：** Agnes Image 2.5 Flash，可与 Seedream 5.0 Pro 并列选择
+- **生视频：** Agnes Video 2.5 Flash，可与 Seedance 2.0 并列选择
+
+一个 Agnes 密钥同时解锁文本、生图和生视频。标注修图不再把 TOS 重映射后的静图当 vision URL 发给模型；Agnes Image 会把可达的 HTTP(S) 静图内联为 data URI。
 
 ### 2026-09-16 — 引导式创作 Skill
 
@@ -101,7 +111,7 @@
 
 ## 已接入模型
 
-在 Agent 输入框输入 `@` 可指定模型。图像与视频生成走 [火山方舟](https://console.volcengine.com/ark)。目录见 `shared/constants/modelCatalog.ts` 与 `shared/constants/aiModels.ts`。
+在 Agent 输入框输入 `@` 可指定模型。图像与视频生成可分别使用 [火山方舟](https://console.volcengine.com/ark) 或 Agnes。目录见 `shared/constants/modelCatalog.ts` 与 `shared/constants/aiModels.ts`。
 
 | 用途 | 模型 | 服务商 |
 | --- | --- | --- |
@@ -109,8 +119,12 @@
 | Agent 文本 | Seed 2.1 Turbo | 火山方舟 · 豆包 |
 | Agent 文本 | DeepSeek V4.1 Flash | DeepSeek 官方 |
 | Agent 文本 | GLM 5.3 | Z.ai 官方 |
+| Agent 文本 | Agnes 2.5 Flash | Agnes 官方国际站 API |
+| Agent 文本 | Agnes 3.0 Flash | Agnes 官方国际站 API |
 | 图像 · t2i / i2i / r2i | Seedream 5.0 Pro | 火山方舟 |
+| 图像 · t2i / i2i / r2i | Agnes Image 2.5 Flash | Agnes 官方 |
 | 视频 · t2v / i2v / r2v | Seedance 2.0 | 火山方舟 |
+| 视频 · t2v / i2v / r2v | Agnes Video 2.5 Flash | Agnes 官方 |
 
 模型仍在持续添加。若需要某个国内端点，请开 [Issue](https://github.com/susirial/Miao-AI/issues)。
 
@@ -157,10 +171,14 @@ sudo apt update && sudo apt install ffmpeg
 
 1. 启动喵 AI，点击右上角 **服务连接**。
 2. 填写 [火山方舟 API Key](https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey)。方舟提供 Seed 文本、Seedream 图像和 Seedance 视频。
-3. 可选填写 [DeepSeek](https://platform.deepseek.com/api_keys) 或 [Z.ai](https://z.ai/manage-apikey/apikey-list) 密钥，并选择对应文本模型。
+3. 可选填写 [DeepSeek](https://platform.deepseek.com/api_keys)、[Z.ai](https://z.ai/manage-apikey/apikey-list) 或 [Agnes](https://platform.agnes-ai.com/) 密钥。一个 Agnes 密钥可同时解锁 Agnes 文本、图像和视频模型。
 4. 点击 **保存并测试已配置服务**。
 
 默认 Agent 模型为 **Seed 2.1 Pro**（`ark/seed-2.1-pro`）。连通测试会发送一次短请求，可能产生少量费用。密钥存在本地 SQLite，不要写进 `.env`。
+
+[Agnes 2.5 Flash](https://wiki.agnes-ai.com/en/docs/agnes-25-flash.md) 与 [Agnes 3.0 Flash](https://agnes-ai.com/zh-Hans/docs/agnes-30-flash) 文本模型在喵 AI 中仅接受公开可访问的 HTTP(S) 图片 URL。该文本 Vision 限制不适用于 Agnes Image 生图，本地 JPEG、PNG、WEBP 素材会转换为 Data URI。
+
+Agnes Video 2.5 Flash 固定生成 720P、4–12 秒视频。图生视频和参考生视频仅接受公网 HTTPS 图片或音频 URL；不支持本地上传、参考视频或显式音轨控制。Agnes 的可用性与速率限制取决于账户等级，请以官方文档为准。
 
 ### 可选 TOS：Seedance 本地参考素材
 
@@ -177,6 +195,7 @@ flowchart LR
   ark[火山方舟]
   ds[DeepSeek]
   zai[Z.ai]
+  agnes[Agnes]
 
   ui --> nitro
   electron --> nitro
@@ -184,10 +203,11 @@ flowchart LR
   nitro --> ark
   nitro --> ds
   nitro --> zai
+  nitro --> agnes
 ```
 
 - `app/` — Vue 页面、画布、Agent 对话
-- `server/` — API、进程内 Agent 循环、方舟 / DeepSeek / Z.ai 适配
+- `server/` — API、进程内 Agent 循环、方舟 / DeepSeek / Z.ai / Agnes 适配
 - `shared/` — 模型目录与类型
 - `electron/` — macOS 壳：隔离 Nitro、随机回环端口、每次启动独立令牌，渲染进程无 Node
 
@@ -233,6 +253,7 @@ Skill 文件见 [`server/agent/skills/long-form-video.md`](server/agent/skills/l
 ```sh
 pnpm lint
 pnpm typecheck
+pnpm test:llm
 pnpm test:sqlite
 pnpm test:electron-main
 ```

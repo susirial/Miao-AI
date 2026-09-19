@@ -9,7 +9,7 @@ const emit = defineEmits<{ remove: [] }>()
 
 <template>
   <span :title="model.task" class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 align-middle text-xs font-medium text-foreground">
-    <img v-if="agentModelLogo(model)" :src="agentModelLogo(model)" alt="" class="size-4 shrink-0 object-contain">
+    <img v-if="agentModelLogo(model)" :src="agentModelLogo(model)" alt="" class="h-4 w-auto max-w-10 shrink-0 object-contain">
     <Icon v-else :name="model.icon || 'lucide:box'" class="size-4 shrink-0" />
     <span class="truncate">{{ model.name }}</span>
     <span class="text-[10px] font-normal text-muted-foreground">{{ model.task }}</span>

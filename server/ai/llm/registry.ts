@@ -14,11 +14,13 @@ export function captureLlmSnapshot(settings: ServiceSettings = readServiceSettin
     ark: settings.arkKey,
     deepseek: settings.deepSeekKey,
     zai: settings.zaiKey,
+    agnes: settings.agnesKey,
   }[catalogModel.provider]
   const textReady = {
     ark: Boolean(settings.arkCheckedAt) && settings.arkOk,
     deepseek: Boolean(settings.deepSeekCheckedAt) && settings.deepSeekOk,
     zai: Boolean(settings.zaiCheckedAt) && settings.zaiOk,
+    agnes: Boolean(settings.agnesCheckedAt) && settings.agnesOk,
   }[catalogModel.provider]
   return Object.freeze({
     provider: catalogModel.provider,

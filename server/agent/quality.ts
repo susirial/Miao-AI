@@ -1,3 +1,4 @@
+import type { AgentMediaCapabilities } from './mediaModels'
 import type { AgentConfirmPolicy, AgentQuality, GenerateImageArgs, GenerateVideoArgs, VideoFamily } from './types'
 import { isSeedance2Duration, isSeedance2Resolution } from './seedance2'
 
@@ -27,7 +28,13 @@ export function applyImageQuality(args: GenerateImageArgs, quality: AgentQuality
   }
 }
 
-export function clampVideoToFamily(args: GenerateVideoArgs, _family: VideoFamily = 'seedance-2'): GenerateVideoArgs {
+export function clampVideoToFamily(
+  args: GenerateVideoArgs,
+  _family: VideoFamily = 'seedance-2',
+  caps?: AgentMediaCapabilities,
+): GenerateVideoArgs {
+  if (caps?.presetVideo === 'agnes')
+    return { ...args, family: 'seedance-2' }
   const duration = Math.min(15, Math.max(4, Math.floor(Number(args.duration) || 5)))
   return {
     ...args,
@@ -39,6 +46,10 @@ export function clampVideoToFamily(args: GenerateVideoArgs, _family: VideoFamily
   }
 }
 
-export function applyVideoQuality(args: GenerateVideoArgs, _quality: AgentQuality): GenerateVideoArgs {
-  return clampVideoToFamily(args)
+export function applyVideoQuality(
+  args: GenerateVideoArgs,
+  _quality: AgentQuality,
+  caps?: AgentMediaCapabilities,
+): GenerateVideoArgs {
+  return clampVideoToFamily(args, 'seedance-2', caps)
 }

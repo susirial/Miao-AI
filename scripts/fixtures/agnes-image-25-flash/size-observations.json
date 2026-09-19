@@ -1,0 +1,322 @@
+[
+  {
+    "size": "1K",
+    "ratio": "1:1",
+    "expectedSize": "1024x1024",
+    "actualSize": "1024x1024",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "1K",
+    "ratio": "3:4",
+    "expectedSize": "864x1152",
+    "actualSize": "864x1152",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "1K",
+    "ratio": "4:3",
+    "expectedSize": "1152x864",
+    "actualSize": "1152x864",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "1K",
+    "ratio": "16:9",
+    "expectedSize": "1312x736",
+    "actualSize": "1312x736",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "1K",
+    "ratio": "9:16",
+    "expectedSize": "736x1312",
+    "actualSize": "736x1312",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "1K",
+    "ratio": "2:3",
+    "expectedSize": "832x1248",
+    "actualSize": "832x1248",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "1K",
+    "ratio": "3:2",
+    "expectedSize": "1248x832",
+    "actualSize": "1248x832",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "1K",
+    "ratio": "21:9",
+    "expectedSize": "1568x672",
+    "actualSize": "1568x672",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "2K",
+    "ratio": "1:1",
+    "expectedSize": "2048x2048",
+    "actualSize": "2048x2048",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "2K",
+    "ratio": "3:4",
+    "expectedSize": "1728x2304",
+    "actualSize": "1728x2304",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "2K",
+    "ratio": "4:3",
+    "expectedSize": "2304x1728",
+    "actualSize": "2304x1728",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "2K",
+    "ratio": "16:9",
+    "expectedSize": "2624x1472",
+    "actualSize": "2624x1472",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "2K",
+    "ratio": "9:16",
+    "expectedSize": "1472x2624",
+    "actualSize": "1472x2624",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "2K",
+    "ratio": "2:3",
+    "expectedSize": "1664x2496",
+    "actualSize": "1664x2496",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "2K",
+    "ratio": "3:2",
+    "expectedSize": "2496x1664",
+    "actualSize": "2496x1664",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "2K",
+    "ratio": "21:9",
+    "expectedSize": "3136x1344",
+    "actualSize": "3136x1344",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "3K",
+    "ratio": "1:1",
+    "expectedSize": "3072x3072",
+    "actualSize": "3072x3072",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "3K",
+    "ratio": "3:4",
+    "expectedSize": "2592x3456",
+    "actualSize": "2592x3456",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "3K",
+    "ratio": "4:3",
+    "expectedSize": "3456x2592",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "3K",
+    "ratio": "16:9",
+    "expectedSize": "3936x2208",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "3K",
+    "ratio": "9:16",
+    "expectedSize": "2208x3936",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "3K",
+    "ratio": "2:3",
+    "expectedSize": "2496x3744",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "3K",
+    "ratio": "3:2",
+    "expectedSize": "3744x2496",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "3K",
+    "ratio": "21:9",
+    "expectedSize": "4704x2016",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "4K",
+    "ratio": "1:1",
+    "expectedSize": "4096x4096",
+    "actualSize": "4096x4096",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "4K",
+    "ratio": "3:4",
+    "expectedSize": "3456x4608",
+    "actualSize": "3456x4608",
+    "ratioError": 0,
+    "exactPixels": true,
+    "product": true,
+    "status": 200
+  },
+  {
+    "size": "4K",
+    "ratio": "4:3",
+    "expectedSize": "4608x3456",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "4K",
+    "ratio": "16:9",
+    "expectedSize": "5248x2944",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "4K",
+    "ratio": "9:16",
+    "expectedSize": "2944x5248",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "4K",
+    "ratio": "2:3",
+    "expectedSize": "3328x4992",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "4K",
+    "ratio": "3:2",
+    "expectedSize": "4992x3328",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  },
+  {
+    "size": "4K",
+    "ratio": "21:9",
+    "expectedSize": "6272x2688",
+    "actualSize": null,
+    "ratioError": null,
+    "exactPixels": false,
+    "product": false,
+    "status": 429
+  }
+]

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { resolveGeneratorTaskSlug } from '~~/shared/utils/generatorRoutes'
+import { applyGeneratorSelection } from '@/composables/useAiGeneratorForm'
 import { IMAGE_EDITOR_PATH, resolveToolSlug, studioToolBySlug, VIDEO_EDITOR_PATH } from '@/constants/usefulTools'
 
 const route = useRoute()
@@ -10,37 +12,41 @@ const { selectedTask } = useAiGeneratorTask()
 
 const rawSlug = String(route.params.slug || '')
 const canonicalSlug = resolveToolSlug(rawSlug)
+const generatorTask = computed(() => resolveGeneratorTaskSlug(canonicalSlug))
 const tool = computed(() => studioToolBySlug(rawSlug))
 const isImageEditor = computed(() => tool.value?.slug === 'image-to-image')
 const isVideoEditor = computed(() => tool.value?.slug === 'reference-to-video')
-const isGeneratorEditor = computed(() => isImageEditor.value || isVideoEditor.value)
-const toolTitle = computed(() => isImageEditor.value ? t('tools.imageEditor') : isVideoEditor.value ? t('tools.videoEditor') : tool.value?.title || '')
+const isGeneratorEditor = computed(() => Boolean(generatorTask.value) || isImageEditor.value || isVideoEditor.value)
+const toolTitle = computed(() => isImageEditor.value ? t('tools.imageEditor') : isVideoEditor.value ? t('tools.videoEditor') : tool.value?.title || generatorTask.value?.task || '')
 const toolDescription = computed(() => isImageEditor.value ? t('tools.imageEditorDescription') : isVideoEditor.value ? t('tools.videoEditorDescription') : tool.value?.description || '')
 
-if (rawSlug && rawSlug !== canonicalSlug && tool.value) {
-  await navigateTo(localePath(`/tools/${canonicalSlug}`), { redirectCode: 301, replace: true })
+if (rawSlug && rawSlug !== canonicalSlug && (tool.value || generatorTask.value)) {
+  await navigateTo(localePath({
+    path: `/tools/${canonicalSlug}`,
+    query: route.query,
+  }), { redirectCode: 301, replace: true })
 }
 
-if (!tool.value) {
+if (!tool.value && !generatorTask.value) {
   throw createError({
     statusCode: 404,
     statusMessage: 'Tool not found',
   })
 }
 
-watch(() => tool.value?.slug, (slug) => {
-  if (slug === 'image-to-image') {
-    selectedCategory.value = 'Image'
-    selectedTask.value = 'Image to Image'
-  }
-  if (slug === 'reference-to-video') {
-    selectedCategory.value = 'Video'
-    selectedTask.value = 'Reference to Video'
-  }
+watch(() => [canonicalSlug, route.query.model], () => {
+  const modelId = typeof route.query.model === 'string' ? route.query.model : ''
+  if (modelId && applyGeneratorSelection(modelId))
+    return
+  const lock = generatorTask.value
+  if (!lock)
+    return
+  selectedCategory.value = lock.category
+  selectedTask.value = lock.task
 }, { immediate: true })
 
 const pageUrl = computed(() => {
-  const path = tool.value?.to || `/tools/${tool.value?.slug || ''}`
+  const path = `/tools/${canonicalSlug}`
   return `${publicConfig.siteUrl}${localePath(path)}`
 })
 
@@ -148,7 +154,7 @@ useHead({
 
 <template>
   <div
-    v-if="tool"
+    v-if="tool || generatorTask"
     class="mx-auto flex w-full max-w-[1128px] flex-col gap-5 md:gap-6"
   >
     <div class="flex flex-col gap-2">

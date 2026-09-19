@@ -26,6 +26,12 @@ test('batch confirmation includes each distinct prompt, name, reference and dura
     confirmationKind: () => 'video',
     confirmationModel: () => ({ modelName: 'Seedance 2.0', task: 'Image to Video' }),
     confirmationInputUrls: (image, video) => [video.first_frame_url],
+    captureMediaCapabilities: () => ({ fingerprint: 'test' }),
+    presetImageModelId: () => 'seedream/5-pro-text-to-image',
+    presetVideoModelId: () => 'bytedance/seedance-2-image-to-video',
+    parseGenerateImageArgs: JSON.parse,
+    resolveGenerateImageArgs: value => value,
+    withTurnImageInputs: value => value,
     touch: () => {},
   }
   vm.createContext(sandbox)

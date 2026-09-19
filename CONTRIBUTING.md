@@ -24,6 +24,7 @@ Useful checks before you open a pull request:
 ```sh
 pnpm lint
 pnpm typecheck
+pnpm test:llm
 pnpm test:sqlite
 pnpm test:electron-main
 ```
@@ -31,7 +32,7 @@ pnpm test:electron-main
 ## Project map
 
 - `app/` — Nuxt / Vue UI
-- `server/` — Nitro APIs, agent runtime, SQLite, Ark / DeepSeek / Z.ai adapters
+- `server/` — Nitro APIs, agent runtime, SQLite, Ark / DeepSeek / Z.ai / Agnes adapters
 - `shared/` — model catalogs and types used by both sides
 - `electron/` — macOS desktop shell
 - `i18n/locales/` — English and Simplified Chinese strings

@@ -1,0 +1,38 @@
+{
+  "extraBodyInvalid": {
+    "status": 400,
+    "payload": {
+      "error": {
+        "message": "extra_body.image must be a public http(s) URL or valid image base64 (request id: [ID])",
+        "type": "AgnesAI_error",
+        "param": "",
+        "code": "invalid_request"
+      }
+    }
+  },
+  "topLevelInvalid": {
+    "status": 400,
+    "payload": {
+      "error": {
+        "message": "image must be a public http(s) URL or valid image base64 (request id: [ID])",
+        "type": "AgnesAI_error",
+        "param": "",
+        "code": "invalid_request"
+      }
+    }
+  },
+  "legalDataUri": {
+    "status": 200,
+    "payload": {
+      "data": [
+        {
+          "url": "[REMOTE_URL]",
+          "b64_json": "",
+          "revised_prompt": ""
+        }
+      ],
+      "created": "[TIMESTAMP]",
+      "task_id": "[ID]"
+    }
+  }
+}

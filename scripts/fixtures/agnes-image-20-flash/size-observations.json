@@ -1,0 +1,56 @@
+[
+  {
+    "requestedSize": "1024x1024",
+    "actualSize": "1024x1024",
+    "ratioError": 0,
+    "product": true
+  },
+  {
+    "requestedSize": "1024x768",
+    "actualSize": "1152x864",
+    "ratioError": 0,
+    "product": true,
+    "note": "Request string is the product enum. Output pixels may change while the ratio is preserved."
+  },
+  {
+    "requestedSize": "768x1024",
+    "actualSize": "864x1152",
+    "ratioError": 0,
+    "product": true,
+    "note": "Request string is the product enum. Output pixels may change while the ratio is preserved."
+  },
+  {
+    "requestedSize": "1536x1024",
+    "actualSize": "1248x832",
+    "ratioError": 0,
+    "product": true,
+    "note": "Request string is the product enum. Output pixels may change while the ratio is preserved."
+  },
+  {
+    "requestedSize": "2048x2048",
+    "actualSize": "2048x2048",
+    "ratioError": 0,
+    "product": true
+  },
+  {
+    "requestedSize": "1344x768",
+    "actualSize": null,
+    "ratioError": null,
+    "product": false,
+    "note": "Rejected: observed output ratio differed by more than 1%."
+  },
+  {
+    "requestedSize": "768x1344",
+    "actualSize": null,
+    "ratioError": null,
+    "product": false,
+    "note": "Rejected: observed output ratio differed by more than 1%."
+  },
+  {
+    "requestedSize": "1536x672",
+    "actualSize": null,
+    "ratioError": null,
+    "product": false,
+    "note": "Rejected: observed output ratio differed by more than 1%."
+  }
+]

@@ -4,8 +4,15 @@ export function generationProvider(job: {
   provider?: string
 }): GenerationProvider | undefined {
   const provider = String(job.provider || '').trim()
-  if (provider === 'ark-image' || provider === 'ark-video' || provider === 'local')
+  if (
+    provider === 'agnes-image'
+    || provider === 'agnes-video'
+    || provider === 'ark-image'
+    || provider === 'ark-video'
+    || provider === 'local'
+  ) {
     return provider
+  }
   return undefined
 }
 

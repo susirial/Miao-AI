@@ -9,6 +9,7 @@ const PROVIDER_NAMES: Record<LlmSnapshot['provider'], string> = {
   ark: 'Ark',
   deepseek: 'DeepSeek',
   zai: 'Z.ai',
+  agnes: 'Agnes',
 }
 
 export function assertAgentSecrets(snapshot: LlmSnapshot = captureLlmSnapshot()) {

@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { isGenerationFailureRetryable, isNonRetryableGenerationFailure } from '../shared/types/generation.ts'
-import { askUserPublicPrompt, wrapAssistantLoopText } from '../shared/utils/agentLoopText.ts'
+import { askUserPublicPrompt, visibleAssistantStreamEvent, wrapAssistantLoopText } from '../shared/utils/agentLoopText.ts'
 import { AGENT_INTERRUPT_NOTE, AGENT_STOP_NOTE, AGENT_STOP_WITH_GENERATIONS_NOTE, agentStopNote, dropStaleStopNotesForPendingChoice, isAgentInterruptNote, isAgentStopNote } from '../shared/utils/agentStopNote.ts'
 import { readErrorMessage } from '../shared/utils/apiError.ts'
 
@@ -24,6 +24,36 @@ test('abort without a user stop does not write Stopped', () => {
   assert.match(loop, /if \(sessionWantsStop\(session\) \|\| isLoopAbort\(error\)\) \{\s*endLoopForAbort/)
   assert.doesNotMatch(loop, /if \(signal\?\.aborted\) \{\s*session\.stopRequested = true/)
   assert.doesNotMatch(loop, /if \(sessionWantsStop\(session\) \|\| llmSignal\.aborted\) \{\s*noteAgentStopped/)
+})
+
+test('live stream reasoning is replaced as a think block; plain content still appends', () => {
+  assert.deepEqual(visibleAssistantStreamEvent({
+    reasoning: 'The',
+    text: '',
+  }), { type: 'text_replace', delta: '<think>The</think>' })
+  assert.deepEqual(visibleAssistantStreamEvent({
+    reasoning: 'The user wants a still',
+    text: '',
+  }), { type: 'text_replace', delta: '<think>The user wants a still</think>' })
+  assert.deepEqual(visibleAssistantStreamEvent({
+    reasoning: 'Plan the still',
+    text: 'A red apple',
+    contentDelta: ' apple',
+  }), { type: 'text_replace', delta: '<think>Plan the still</think>A red apple' })
+  assert.deepEqual(visibleAssistantStreamEvent({
+    reasoning: '',
+    text: 'A red',
+    contentDelta: ' apple',
+  }), { type: 'text', delta: ' apple' })
+  assert.equal(visibleAssistantStreamEvent({
+    reasoning: '',
+    text: '',
+  }), null)
+  const loop = readFileSync(new URL('../server/agent/loop.ts', import.meta.url), 'utf8')
+  assert.match(loop, /visibleAssistantStreamEvent/)
+  const markdown = readFileSync(new URL('../app/components/agent-lab/AgentLabMarkdown.vue', import.meta.url), 'utf8')
+  assert.match(markdown, /:open="streaming \|\| undefined"/)
+  assert.match(markdown, /streaming && !thinking/)
 })
 
 test('ask_user turns keep a public sentence outside think tags', () => {
@@ -97,4 +127,19 @@ test('fetch diagnostics prefer a concrete cause over a generic wrapper', () => {
   })
   assert.equal(readErrorMessage(error, 'Request failed'), 'socket closed by upstream')
   assert.equal(readErrorMessage(new TypeError('fetch failed'), 'Request failed'), 'Request failed')
+})
+
+test('registered media models use the same capability snapshot through confirmation', () => {
+  const loop = readFileSync(new URL('../server/agent/loop.ts', import.meta.url), 'utf8')
+  const models = readFileSync(new URL('../server/agent/models.ts', import.meta.url), 'utf8')
+
+  assert.match(loop, /prepareModelGeneration\(call\.function\.name, call\.function\.arguments, session, caps\)/)
+  assert.match(loop, /resolveAgentGenerationSpec\(model, args\.input, caps\)/)
+  assert.match(loop, /runConfirmedItems\([^)]*pending\.caps/)
+  assert.match(loop, /pending\.caps\.fingerprint !== liveCaps\.fingerprint/)
+  assert.match(loop, /manualApprovalRequired/)
+  assert.match(loop, /capabilityRequeueFallback/)
+  assert.match(loop, /queueAskUser\(session\.id, \[\{ toolCallId, args: fallback\.args \}\], emit\)/)
+  assert.match(models, /prepareModelGeneration\([^)]*caps: AgentMediaCapabilities/)
+  assert.match(models, /resolveAgentGenerationSpec\(model, validated, caps\)/)
 })

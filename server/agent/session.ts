@@ -1,8 +1,10 @@
+import type { AgentMediaCapabilities } from './mediaModels'
 import type { StoredSessionSnapshot } from './sessionStore'
 import type { AgentConfirmPolicy, AgentImage, AgentQuality, ChatMessage, ChoicePayload, ConfirmationPayload } from './types'
 import { createHash } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { isImageFamilyId, isVideoFamilyId } from '~~/shared/constants/modelCatalog'
 import { isInternalAgentChatText, publicAgentChatText } from '~~/shared/utils/agentChatVisibility'
 import { normalizeAgentLocale } from '~~/shared/utils/agentLocale'
 import { allocateAssetName } from '~~/shared/utils/assetName'
@@ -30,6 +32,8 @@ export interface AgentSession {
   pendingConfirmation: null | {
     payload: ConfirmationPayload
     items: PendingToolItem[]
+    caps?: AgentMediaCapabilities
+    manualApprovalRequired?: boolean
   }
   pendingChoice: null | {
     payload: ChoicePayload
@@ -46,6 +50,8 @@ export interface AgentSession {
   bffUrl?: string
   quality: AgentQuality
   confirmPolicy: AgentConfirmPolicy
+  imageFamily?: 'ark-image' | 'agnes-image'
+  videoFamily?: 'ark-video' | 'agnes-video'
   /** Interface language of the client that sent the latest turn. */
   locale?: string
   updatedAt: number
@@ -81,6 +87,8 @@ function persistDatabase(session: AgentSession) {
     title: session.title,
     quality: session.quality,
     confirmPolicy: session.confirmPolicy,
+    imageFamily: session.imageFamily,
+    videoFamily: session.videoFamily,
     messages: session.messages,
     images: session.images,
     pendingConfirmation: session.pendingConfirmation,
@@ -192,6 +200,8 @@ function hydrateLoaded(loaded: AgentSession): AgentSession {
   loaded.pendingConfirmation = loaded.pendingConfirmation || null
   loaded.pendingChoice = loaded.pendingChoice || null
   loaded.quality = parseAgentQuality(loaded.quality)
+  loaded.imageFamily = isImageFamilyId(loaded.imageFamily) ? loaded.imageFamily : undefined
+  loaded.videoFamily = isVideoFamilyId(loaded.videoFamily) ? loaded.videoFamily : undefined
   loaded.confirmPolicy = loaded.confirmPolicy === 'auto' || loaded.confirmPolicy === 'when_needed'
     ? loaded.confirmPolicy
     : 'always'
@@ -268,6 +278,8 @@ function sessionFromStorage(snapshot: StoredSessionSnapshot): AgentSession {
     projectId: snapshot.projectId || '',
     quality: snapshot.quality,
     confirmPolicy: snapshot.confirmPolicy,
+    imageFamily: snapshot.imageFamily,
+    videoFamily: snapshot.videoFamily,
     updatedAt: snapshot.updatedAt,
   })
 }
@@ -485,6 +497,8 @@ export async function removeSessionImages(
     title: session.title,
     quality: session.quality,
     confirmPolicy: session.confirmPolicy,
+    imageFamily: session.imageFamily,
+    videoFamily: session.videoFamily,
     messages: session.messages,
     images: session.images,
     replaceImages: true,
@@ -611,8 +625,8 @@ export function touch(session: AgentSession) {
   sessions.set(session.id, session)
   schedulePersist(session)
 }
-export function refreshSessionPrompt(session: AgentSession) {
-  const content = sessionMediaPrompt(session.images, session.confirmPolicy || 'always', session.locale)
+export function refreshSessionPrompt(session: AgentSession, caps?: AgentMediaCapabilities) {
+  const content = sessionMediaPrompt(session.images, session.confirmPolicy || 'always', session.locale, caps)
   if (session.messages[0]?.role === 'system')
     session.messages[0] = { role: 'system', content }
   else

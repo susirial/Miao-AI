@@ -325,6 +325,8 @@ test('Ark assets reject missing TOS configuration and unsupported local media of
 test('media resolver routes only Seedance 2 video models to Ark', () => {
   const resolver = load('server/ai/media/resolve.ts', {
     '../../../shared/constants/aiModels': {
+      isAgnesImageModelId: () => false,
+      isAgnesVideoModelId: () => false,
       isArkImageModelId: () => false,
       isArkVideoModelId: model => model === 'bytedance/seedance-2-text-to-video',
     },

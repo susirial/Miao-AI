@@ -1,4 +1,4 @@
-export type TextProviderId = 'ark' | 'deepseek' | 'zai'
+export type TextProviderId = 'ark' | 'deepseek' | 'zai' | 'agnes'
 export type ProviderId = TextProviderId
 export type ServiceCapability = 'text' | 'image' | 'video'
 

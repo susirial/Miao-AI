@@ -1,0 +1,22 @@
+{
+  "pixelLegacy": {
+    "status": 200,
+    "actualSize": "1024x1024"
+  },
+  "topLevelFormat": {
+    "status": 200,
+    "validationHit": false
+  },
+  "extraBodyInvalid": {
+    "status": 400,
+    "validationHit": true
+  },
+  "topLevelInvalid": {
+    "status": 400,
+    "validationHit": true
+  },
+  "legalDataUri": {
+    "status": 200
+  },
+  "imageLocation": "extra_body.image"
+}

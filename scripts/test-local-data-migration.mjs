@@ -1,10 +1,38 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
+import vm from 'node:vm'
+import ts from 'typescript'
 import { closeDatabase, configureDatabase, connectDatabase, defineCollection, stripLegacyAccounting, stripLegacyScope } from '../server/utils/sqlite.ts'
+
+const require = createRequire(import.meta.url)
+const root = resolve(import.meta.dirname, '..')
+
+function loadPath(path, mocks = {}, cache = new Map()) {
+  if (cache.has(path))
+    return cache.get(path).exports
+  const module = { exports: {} }
+  cache.set(path, module)
+  const code = ts.transpileModule(readFileSync(path, 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true, target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  const localRequire = (id) => {
+    if (id in mocks)
+      return mocks[id]
+    if (id.startsWith('.')) {
+      const candidate = resolve(dirname(path), id.endsWith('.ts') ? id : `${id}.ts`)
+      if (existsSync(candidate))
+        return loadPath(candidate, mocks, cache)
+    }
+    return require(id)
+  }
+  vm.runInNewContext(code, { module, exports: module.exports, require: localRequire })
+  return module.exports
+}
 
 test('existing data becomes one local installation without losing projects or conversation history', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'polox-local-migration-'))
@@ -97,6 +125,16 @@ test('provider removal migration scrubs settings and deletes only fal or provide
       assert.equal(field in settings, false)
     assert.deepEqual(db.prepare('SELECT id FROM generation_jobs ORDER BY id').all().map(row => row.id), ['image', 'local', 'video'])
     assert.equal(Number(db.prepare('PRAGMA user_version').get().user_version), 4)
+
+    const { readServiceSettings } = loadPath(resolve(root, 'server/utils/serviceSettings.ts'), {
+      './sqlite': { connectDatabase: () => db },
+    })
+    const normalized = readServiceSettings()
+    assert.equal(normalized.version, 4)
+    assert.equal(normalized.arkKey, 'ark-secret')
+    assert.equal(normalized.agnesKey, '')
+    assert.equal(normalized.agnesOk, false)
+    assert.equal(normalized.agnesCheckedAt, '')
   }
   finally {
     closeDatabase()

@@ -25,7 +25,7 @@ export interface GenerateImageArgs {
   name?: string
   prompt: string
   aspect_ratio: Seedream5AspectRatio
-  resolution: Seedream5Resolution
+  resolution: Seedream5Resolution | '3K' | '4K'
   input_urls: string[]
   reference_images: string[]
   uncertain_fields: UncertainField[]
@@ -38,7 +38,7 @@ export interface GenerateVideoArgs {
   aspect_ratio: Seedance2AspectRatio
   resolution: Seedance2Resolution
   duration: number
-  generate_audio: boolean
+  generate_audio?: boolean
   family: VideoFamily
   first_frame: string
   last_frame: string
@@ -57,7 +57,7 @@ export interface ResolvedGenerateVideo {
   aspect_ratio: Seedance2AspectRatio
   resolution: Seedance2Resolution
   duration: number
-  generate_audio: boolean
+  generate_audio?: boolean
   family: VideoFamily
   first_frame_url?: string
   last_frame_url?: string

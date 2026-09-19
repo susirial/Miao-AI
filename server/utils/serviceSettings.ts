@@ -1,14 +1,18 @@
 import type { TextProviderId } from '../../shared/types/provider'
+import type { ImageFamilyId, VideoFamilyId } from '../../shared/constants/modelCatalog'
 import { randomUUID } from 'node:crypto'
-import { DEFAULT_TEXT_MODEL_ID, getTextModel } from '../../shared/constants/modelCatalog'
+import { DEFAULT_IMAGE_FAMILY, DEFAULT_TEXT_MODEL_ID, DEFAULT_VIDEO_FAMILY, getTextModel, isImageFamilyId, isVideoFamilyId } from '../../shared/constants/modelCatalog'
 import { connectDatabase } from './sqlite'
 
 export interface ServiceSettings {
-  version: 3
+  version: 4
   selectedTextModel: string
+  selectedImageFamily: ImageFamilyId
+  selectedVideoFamily: VideoFamilyId
   arkKey: string
   deepSeekKey: string
   zaiKey: string
+  agnesKey: string
   tosAccessKeyId: string
   tosSecretAccessKey: string
   tosBucket: string
@@ -17,19 +21,24 @@ export interface ServiceSettings {
   arkOk: boolean
   deepSeekOk: boolean
   zaiOk: boolean
+  agnesOk: boolean
   tosOk: boolean
   arkCheckedAt: string
   deepSeekCheckedAt: string
   zaiCheckedAt: string
+  agnesCheckedAt: string
   tosCheckedAt: string
   checkedAt: string
 }
 
 export interface ServiceSettingsInput {
   selectedTextModel?: string
+  selectedImageFamily?: string
+  selectedVideoFamily?: string
   arkKey?: string
   deepSeekKey?: string
   zaiKey?: string
+  agnesKey?: string
   tosAccessKeyId?: string
   tosSecretAccessKey?: string
   tosBucket?: string
@@ -74,11 +83,14 @@ function normalizeServiceSettings(value: unknown): ServiceSettings {
   const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {}
   const selectedTextModel = stringValue(raw.selectedTextModel)
   return {
-    version: 3,
+    version: 4,
     selectedTextModel: getTextModel(selectedTextModel) ? selectedTextModel : DEFAULT_TEXT_MODEL_ID,
+    selectedImageFamily: isImageFamilyId(raw.selectedImageFamily) ? raw.selectedImageFamily : DEFAULT_IMAGE_FAMILY,
+    selectedVideoFamily: isVideoFamilyId(raw.selectedVideoFamily) ? raw.selectedVideoFamily : DEFAULT_VIDEO_FAMILY,
     arkKey: stringValue(raw.arkKey),
     deepSeekKey: stringValue(raw.deepSeekKey),
     zaiKey: stringValue(raw.zaiKey),
+    agnesKey: stringValue(raw.agnesKey),
     tosAccessKeyId: stringValue(raw.tosAccessKeyId),
     tosSecretAccessKey: stringValue(raw.tosSecretAccessKey),
     tosBucket: stringValue(raw.tosBucket),
@@ -87,10 +99,12 @@ function normalizeServiceSettings(value: unknown): ServiceSettings {
     arkOk: raw.arkOk === true,
     deepSeekOk: raw.deepSeekOk === true,
     zaiOk: raw.zaiOk === true,
+    agnesOk: raw.agnesOk === true,
     tosOk: raw.tosOk === true,
     arkCheckedAt: stringValue(raw.arkCheckedAt),
     deepSeekCheckedAt: stringValue(raw.deepSeekCheckedAt),
     zaiCheckedAt: stringValue(raw.zaiCheckedAt),
+    agnesCheckedAt: stringValue(raw.agnesCheckedAt),
     tosCheckedAt: stringValue(raw.tosCheckedAt),
     checkedAt: stringValue(raw.checkedAt),
   }
@@ -121,6 +135,26 @@ export function writeServiceSettings(settings: ServiceSettings) {
   connectDatabase().prepare('INSERT INTO local_service_settings(id, body) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET body = excluded.body').run(JSON.stringify(normalized))
 }
 
+/** Persist last-used media families without clearing connection-test flags. */
+export function rememberMediaFamilies(input: {
+  selectedImageFamily?: ImageFamilyId
+  selectedVideoFamily?: VideoFamilyId
+}) {
+  const current = readServiceSettings()
+  if (input.selectedImageFamily !== undefined && !isImageFamilyId(input.selectedImageFamily))
+    throw new TypeError('selectedImageFamily must be ark-image or agnes-image')
+  if (input.selectedVideoFamily !== undefined && !isVideoFamilyId(input.selectedVideoFamily))
+    throw new TypeError('selectedVideoFamily must be ark-video or agnes-video')
+  const next: ServiceSettings = {
+    ...current,
+    selectedImageFamily: input.selectedImageFamily ?? current.selectedImageFamily,
+    selectedVideoFamily: input.selectedVideoFamily ?? current.selectedVideoFamily,
+    revision: randomUUID(),
+  }
+  writeServiceSettings(next)
+  return next
+}
+
 export class ServiceSettingsRevisionError extends Error {
   constructor() {
     super('Service settings changed in another window.')
@@ -136,6 +170,16 @@ export function updateServiceSettings(input: ServiceSettingsInput, expectedRevis
   const selectedTextModel = input.selectedTextModel?.trim() || current.selectedTextModel
   if (!getTextModel(selectedTextModel))
     throw new TypeError('Unknown text model.')
+  if (input.selectedImageFamily !== undefined && !isImageFamilyId(input.selectedImageFamily))
+    throw new TypeError('selectedImageFamily must be ark-image or agnes-image')
+  if (input.selectedVideoFamily !== undefined && !isVideoFamilyId(input.selectedVideoFamily))
+    throw new TypeError('selectedVideoFamily must be ark-video or agnes-video')
+  const selectedImageFamily = input.selectedImageFamily === undefined
+    ? current.selectedImageFamily
+    : input.selectedImageFamily
+  const selectedVideoFamily = input.selectedVideoFamily === undefined
+    ? current.selectedVideoFamily
+    : input.selectedVideoFamily
 
   const tosAccessKeyId = input.tosAccessKeyId === undefined ? current.tosAccessKeyId : input.tosAccessKeyId.trim()
   const tosSecretAccessKey = input.tosSecretAccessKey === undefined ? current.tosSecretAccessKey : input.tosSecretAccessKey.trim()
@@ -146,11 +190,14 @@ export function updateServiceSettings(input: ServiceSettingsInput, expectedRevis
     throw new TypeError('TOS access key ID, secret access key, and bucket must be configured together.')
 
   const settings: ServiceSettings = {
-    version: 3,
+    version: 4,
     selectedTextModel,
+    selectedImageFamily,
+    selectedVideoFamily,
     arkKey: input.arkKey === undefined ? current.arkKey : input.arkKey.trim(),
     deepSeekKey: input.deepSeekKey === undefined ? current.deepSeekKey : input.deepSeekKey.trim(),
     zaiKey: input.zaiKey === undefined ? current.zaiKey : input.zaiKey.trim(),
+    agnesKey: input.agnesKey === undefined ? current.agnesKey : input.agnesKey.trim(),
     tosAccessKeyId,
     tosSecretAccessKey,
     tosBucket,
@@ -159,10 +206,12 @@ export function updateServiceSettings(input: ServiceSettingsInput, expectedRevis
     arkOk: false,
     deepSeekOk: false,
     zaiOk: false,
+    agnesOk: false,
     tosOk: false,
     arkCheckedAt: '',
     deepSeekCheckedAt: '',
     zaiCheckedAt: '',
+    agnesCheckedAt: '',
     tosCheckedAt: '',
     checkedAt: '',
   }
@@ -195,23 +244,48 @@ export function publicServiceStatus(settings = readServiceSettings()) {
       validation: 'text-request' as const,
       mediaGenerationVerified: false as const,
     },
+    agnes: {
+      configured: Boolean(settings.agnesKey),
+      ok: Boolean(settings.agnesCheckedAt) && settings.agnesOk,
+      checkedAt: settings.agnesCheckedAt,
+      validation: 'text-request' as const,
+      mediaGenerationVerified: false as const,
+    },
   }
   const textProvider = model.provider as TextProviderId
   const textReady = providerValues[textProvider].ok
   const arkReady = providerValues.ark.ok
+  const agnesReady = providerValues.agnes.ok
+  const mediaReady = arkReady || agnesReady
+  const selectedImageFamily = isImageFamilyId(settings.selectedImageFamily)
+    ? settings.selectedImageFamily
+    : DEFAULT_IMAGE_FAMILY
+  const selectedVideoFamily = isVideoFamilyId(settings.selectedVideoFamily)
+    ? settings.selectedVideoFamily
+    : DEFAULT_VIDEO_FAMILY
+  const selectedImageReady = selectedImageFamily === 'agnes-image' ? agnesReady : arkReady
+  const selectedVideoReady = selectedVideoFamily === 'agnes-video' ? agnesReady : arkReady
+  const mediaBackends = [
+    ...(arkReady ? ['ark' as const] : []),
+    ...(agnesReady ? ['agnes' as const] : []),
+  ]
   return {
     version: settings.version,
     revision: settings.revision,
     selectedTextModel: settings.selectedTextModel,
     selectedTextProvider: textProvider,
     selectedTextCapabilities: model.capabilities,
+    selectedImageFamily,
+    selectedVideoFamily,
+    selectedImageReady,
+    selectedVideoReady,
     providers: providerValues,
     textReady,
-    imageReady: arkReady,
-    videoReady: arkReady,
+    imageReady: mediaReady,
+    videoReady: mediaReady,
     mediaValidation: {
-      image: { backend: 'ark' as const, actualGenerationVerified: false as const },
-      video: { backend: 'ark' as const, actualGenerationVerified: false as const },
+      image: { backends: mediaBackends, actualGenerationVerified: false as const },
+      video: { backends: mediaBackends, actualGenerationVerified: false as const },
     },
     tosConfigured,
     tosOk: Boolean(settings.tosCheckedAt) && settings.tosOk,
@@ -220,7 +294,7 @@ export function publicServiceStatus(settings = readServiceSettings()) {
     tosPrefix: settings.tosPrefix,
     tosRegion: TOS_REGION,
     tosEndpoint: TOS_ENDPOINT,
-    connected: textReady && arkReady,
+    connected: textReady && mediaReady,
     checkedAt: settings.checkedAt,
   }
 }

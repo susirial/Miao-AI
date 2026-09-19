@@ -1,0 +1,35 @@
+{
+  "id": "[ID]",
+  "created": "[CREATED]",
+  "model": "agnes-2.5-flash",
+  "object": "chat.completion",
+  "choices": [
+    {
+      "finish_reason": "length",
+      "index": 0,
+      "message": {
+        "content": "",
+        "role": "assistant",
+        "reasoning_content": "The user wants me to reply with exactly"
+      },
+      "provider_specific_fields": {
+        "matched_stop": null
+      }
+    }
+  ],
+  "usage": {
+    "completion_tokens": 8,
+    "prompt_tokens": 289,
+    "total_tokens": 297,
+    "completion_tokens_details": {
+      "reasoning_tokens": 8,
+      "text_tokens": 0
+    },
+    "prompt_tokens_details": {
+      "cached_tokens": 256
+    }
+  },
+  "metadata": {
+    "weight_version": "default"
+  }
+}

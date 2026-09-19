@@ -33,7 +33,7 @@ export interface ModelOpenAPISchema {
 }
 
 export type FieldPlacement = 'primary' | 'toolbar' | 'advanced' | 'hidden'
-export type FieldWidget = 'textarea' | 'upload' | 'select' | 'radio' | 'number' | 'switch' | 'text'
+export type FieldWidget = 'textarea' | 'upload' | 'url-list' | 'select' | 'radio' | 'number' | 'switch' | 'text'
 
 export interface FieldConfig {
   key: string

@@ -24,6 +24,7 @@ pnpm desktop:dev
 ```sh
 pnpm lint
 pnpm typecheck
+pnpm test:llm
 pnpm test:sqlite
 pnpm test:electron-main
 ```
@@ -31,7 +32,7 @@ pnpm test:electron-main
 ## 目录说明
 
 - `app/` — Nuxt / Vue 界面
-- `server/` — Nitro API、Agent 运行时、SQLite、方舟 / DeepSeek / Z.ai 适配
+- `server/` — Nitro API、Agent 运行时、SQLite、方舟 / DeepSeek / Z.ai / Agnes 适配
 - `shared/` — 两侧共用的模型目录与类型
 - `electron/` — macOS 桌面壳
 - `i18n/locales/` — 英文与简体中文文案

@@ -1,6 +1,7 @@
 import type { ServiceSettings } from './serviceSettings'
 import TosClient from '@volcengine/tos-sdk'
-import { DEFAULT_TEXT_MODEL_ID, getTextModel } from '../../shared/constants/modelCatalog'
+import { DEFAULT_AGNES_TEXT_MODEL_ID, DEFAULT_TEXT_MODEL_ID, getTextModel } from '../../shared/constants/modelCatalog'
+import { PROVIDER_CONFIGS } from '../ai/llm/adapters'
 import { publicServiceStatus, readServiceSettings, TOS_ENDPOINT, TOS_REGION, writeServiceSettings } from './serviceSettings'
 
 interface ConnectionTestResult {
@@ -9,12 +10,6 @@ interface ConnectionTestResult {
   skipped?: boolean
   mediaGenerationVerified?: false
 }
-
-const PROVIDER_ENDPOINTS = {
-  ark: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
-  deepseek: 'https://api.deepseek.com/chat/completions',
-  zai: 'https://api.z.ai/api/paas/v4/chat/completions',
-} as const
 
 async function checkChatCompletion(options: {
   name: string
@@ -60,7 +55,7 @@ function checkArk(settings: ServiceSettings) {
     : getTextModel(DEFAULT_TEXT_MODEL_ID)!
   return checkChatCompletion({
     name: 'Ark',
-    endpoint: PROVIDER_ENDPOINTS.ark,
+    endpoint: PROVIDER_CONFIGS.ark.endpoint,
     apiKey: settings.arkKey,
     model: model.upstreamModelId,
   })
@@ -69,7 +64,7 @@ function checkArk(settings: ServiceSettings) {
 function checkDeepSeek(settings: ServiceSettings) {
   return checkChatCompletion({
     name: 'DeepSeek',
-    endpoint: PROVIDER_ENDPOINTS.deepseek,
+    endpoint: PROVIDER_CONFIGS.deepseek.endpoint,
     apiKey: settings.deepSeekKey,
     model: getTextModel('deepseek/deepseek-v4.1-flash')!.upstreamModelId,
   })
@@ -78,12 +73,31 @@ function checkDeepSeek(settings: ServiceSettings) {
 function checkZai(settings: ServiceSettings) {
   return checkChatCompletion({
     name: 'Z.ai',
-    endpoint: PROVIDER_ENDPOINTS.zai,
+    endpoint: PROVIDER_CONFIGS.zai.endpoint,
     apiKey: settings.zaiKey,
     model: getTextModel('zai/glm-5.3')!.upstreamModelId,
     body: {
       thinking: { type: 'enabled' },
       reasoning_effort: 'low',
+    },
+  })
+}
+
+function agnesProbeModelId(settings: ServiceSettings) {
+  const selected = getTextModel(settings.selectedTextModel)
+  if (selected?.provider === 'agnes')
+    return selected.upstreamModelId
+  return getTextModel(DEFAULT_AGNES_TEXT_MODEL_ID)!.upstreamModelId
+}
+
+function checkAgnes(settings: ServiceSettings) {
+  return checkChatCompletion({
+    name: 'Agnes',
+    endpoint: PROVIDER_CONFIGS.agnes.endpoint,
+    apiKey: settings.agnesKey,
+    model: agnesProbeModelId(settings),
+    body: {
+      chat_template_kwargs: { enable_thinking: false },
     },
   })
 }
@@ -111,14 +125,15 @@ async function checkTos(settings: ServiceSettings): Promise<ConnectionTestResult
 }
 
 export async function testServiceConnections(settings: ServiceSettings) {
-  const [ark, deepSeek, zai, tos] = await Promise.all([
+  const [ark, deepSeek, zai, agnes, tos] = await Promise.all([
     checkArk(settings),
     checkDeepSeek(settings),
     checkZai(settings),
+    checkAgnes(settings),
     checkTos(settings),
   ])
   if (readServiceSettings().revision !== settings.revision)
-    return { ...publicServiceStatus(), ark, deepSeek, zai, tos, superseded: true }
+    return { ...publicServiceStatus(), ark, deepSeek, zai, agnes, tos, superseded: true }
 
   const checkedAt = new Date().toISOString()
   const checked: ServiceSettings = {
@@ -126,13 +141,15 @@ export async function testServiceConnections(settings: ServiceSettings) {
     arkOk: ark.ok,
     deepSeekOk: deepSeek.ok,
     zaiOk: zai.ok,
+    agnesOk: agnes.ok,
     tosOk: tos.ok,
     arkCheckedAt: ark.skipped ? '' : checkedAt,
     deepSeekCheckedAt: deepSeek.skipped ? '' : checkedAt,
     zaiCheckedAt: zai.skipped ? '' : checkedAt,
+    agnesCheckedAt: agnes.skipped ? '' : checkedAt,
     tosCheckedAt: tos.skipped ? '' : checkedAt,
     checkedAt,
   }
   writeServiceSettings(checked)
-  return { ...publicServiceStatus(checked), ark, deepSeek, zai, tos, superseded: false }
+  return { ...publicServiceStatus(checked), ark, deepSeek, zai, agnes, tos, superseded: false }
 }

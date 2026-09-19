@@ -125,3 +125,88 @@ test('failed job delete removes the linked runtime image even without sessionId'
   await module.exports.default({})
   assert.equal(JSON.stringify(removed), JSON.stringify([{ sessionId: 'session-from-runtime', ids: ['shot'] }]))
 })
+
+test('Agnes video deletion blocks active generation and deletes local queued work', async () => {
+  async function run(state) {
+    let removeCalls = 0
+    let updateCalls = 0
+    let findCalls = 0
+    const job = {
+      taskId: 'agnes-video-job',
+      providerTaskId: '',
+      provider: 'agnes-video',
+      state,
+      deleted: false,
+      save: async () => {},
+    }
+    const file = readFileSync(new URL('../server/api/ai/jobs/[taskId].delete.ts', import.meta.url), 'utf8')
+    const js = ts.transpileModule(file, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText
+    const module = { exports: {} }
+    vm.runInNewContext(js, {
+      module,
+      exports: module.exports,
+      console,
+      defineEventHandler: fn => fn,
+      getRouterParam: () => job.taskId,
+      createError: value => Object.assign(new Error(value.statusMessage), value),
+      require: (id) => {
+        if (id.includes('models/generationJob')) {
+          return {
+            GenerationJob: {
+              findOne: () => {
+                findCalls += 1
+                return {
+                  then: resolve => resolve(job),
+                  select: () => ({ lean: async () => ({ state: job.state }) }),
+                }
+              },
+              findOneAndUpdate: async () => {
+                updateCalls += 1
+                return state === 'queued' ? job : null
+              },
+            },
+          }
+        }
+        if (id.includes('generationJobs'))
+          return { generationProvider: () => 'agnes-video' }
+        if (id.includes('generationQueue'))
+          return { dispatchQueuedJobs: async () => {} }
+        if (id.includes('shared/types/generation')) {
+          const active = ['waiting', 'queuing', 'generating', 'moderating', 'archiving']
+          return {
+            GENERATION_ACTIVE_STATES: active,
+            isGenerationActive: value => active.includes(value),
+          }
+        }
+        if (id.includes('agent/session'))
+          return { removeSessionImages: async () => ({ removedIds: [], blocked: false }) }
+        if (id.includes('agentSessionRuntime'))
+          return { findAgentSessionIdForImage: async () => '' }
+        if (id.includes('registry')) {
+          return {
+            removeMediaBackend: async () => {
+              removeCalls += 1
+            },
+          }
+        }
+        if (id.includes('sqlite'))
+          return { connectDatabase: async () => {} }
+        return {}
+      },
+    })
+    return {
+      handler: module.exports.default,
+      counts: () => ({ findCalls, removeCalls, updateCalls }),
+    }
+  }
+
+  const active = await run('generating')
+  await assert.rejects(active.handler({}), error => error.statusCode === 409)
+  assert.deepEqual(active.counts(), { findCalls: 2, removeCalls: 0, updateCalls: 1 })
+
+  const queued = await run('queued')
+  assert.equal(JSON.stringify(await queued.handler({})), JSON.stringify({ ok: true }))
+  assert.deepEqual(queued.counts(), { findCalls: 1, removeCalls: 0, updateCalls: 1 })
+})

@@ -33,19 +33,29 @@ Bring your own keys. There is no Miao account or cloud workspace. Projects, chat
 
 | | Meaning | In the product |
 | --- | --- | --- |
-| **M** | Models | Text, image, and video models — GLM, DeepSeek, Doubao, Seedream, Seedance, and more to come |
+| **M** | Models | Text, image, and video models — Agnes, GLM, DeepSeek, Doubao, Seedream, Seedance, and more to come |
 | **I** | Intelligence | An agent that plans, confirms choices, and runs multi-step production |
 | **A** | Assistant | A creative partner on a canvas, not a prompt box |
 | **O** | Open | MIT licensed, local-first, bring your own keys |
 
 ## Why Miao
 
-- **Models, in one thread.** Pin GLM 5.3, DeepSeek, Doubao Seed, Seedream 5, or Seedance 2 with `@` without leaving the conversation.
+- **Models, in one thread.** Pin Agnes 2.5 Flash, GLM 5.3, DeepSeek, Doubao Seed, Seedream 5, or Seedance 2 with `@` without leaving the conversation.
 - **Intelligence that produces.** The agent turns a brief into stills, clips, and storyboards, then keeps iterating with you.
 - **A creative assistant, not a chatbot.** Every result stays on the canvas so you can compare, reuse, and export.
 - **Open by default.** Web and macOS desktop; SQLite on your machine; no Miao cloud.
 
 ## What's new
+
+### 19 September 2026 — Agnes models and media families
+
+Service connection now has three independent picks: text, image, and video. Home cards open the matching generator model; an explicit `@` or deep-link choice is not overwritten by the saved family.
+
+- **Text:** Agnes 2.5 Flash and Agnes 3.0 Flash
+- **Image:** Agnes Image 2.5 Flash alongside Seedream 5.0 Pro
+- **Video:** Agnes Video 2.5 Flash alongside Seedance 2.0
+
+One Agnes key unlocks Agnes text, image, and video. Annotated image edit no longer sends remapped TOS stills as vision URLs; Agnes Image inlines reachable HTTP(S) stills as data URIs instead.
 
 ### 16 September 2026 — Guided skills
 
@@ -101,7 +111,7 @@ Long-form video (`/long-form-video`) remains available for multi-shot films.
 
 ## Models
 
-Type `@` in the agent composer to pin a model. Image and video generation go through [Volcengine Ark](https://console.volcengine.com/ark). Catalogs live in `shared/constants/modelCatalog.ts` and `shared/constants/aiModels.ts`.
+Type `@` in the agent composer to pin a model. Image and video generation can use [Volcengine Ark](https://console.volcengine.com/ark) or Agnes independently. Catalogs live in `shared/constants/modelCatalog.ts` and `shared/constants/aiModels.ts`.
 
 | Role | Model | Provider |
 | --- | --- | --- |
@@ -109,8 +119,12 @@ Type `@` in the agent composer to pin a model. Image and video generation go thr
 | Agent text | Seed 2.1 Turbo | Volcengine Ark · Doubao |
 | Agent text | DeepSeek V4.1 Flash | DeepSeek official |
 | Agent text | GLM 5.3 | Z.ai official |
+| Agent text | Agnes 2.5 Flash | Agnes official |
+| Agent text | Agnes 3.0 Flash | Agnes official |
 | Image · t2i / i2i / r2i | Seedream 5.0 Pro | Volcengine Ark |
+| Image · t2i / i2i / r2i | Agnes Image 2.5 Flash | Agnes official |
 | Video · t2v / i2v / r2v | Seedance 2.0 | Volcengine Ark |
+| Video · t2v / i2v / r2v | Agnes Video 2.5 Flash | Agnes official |
 
 Models are still being added. Open an [issue](https://github.com/susirial/Miao-AI/issues) if you need a specific mainland-China endpoint.
 
@@ -157,10 +171,14 @@ Confirm both `ffmpeg` and `ffprobe` are on `PATH`, then restart the app.
 
 1. Start Miao and open **Service connection** in the top-right corner.
 2. Enter a [Volcengine Ark API key](https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey). Ark powers Seed text, Seedream, and Seedance.
-3. Optionally add [DeepSeek](https://platform.deepseek.com/api_keys) or [Z.ai](https://z.ai/manage-apikey/apikey-list) keys and select that text model.
+3. Optionally add [DeepSeek](https://platform.deepseek.com/api_keys), [Z.ai](https://z.ai/manage-apikey/apikey-list), or [Agnes](https://platform.agnes-ai.com/) keys. One Agnes key unlocks Agnes text, image, and video models.
 4. Click **Save and test configured providers**.
 
 The default agent model is **Seed 2.1 Pro** (`ark/seed-2.1-pro`). Connection tests send a short request and may incur a small API charge. Keys are stored in local SQLite, not in `.env`.
+
+[Agnes 2.5 Flash](https://wiki.agnes-ai.com/en/docs/agnes-25-flash.md) and [Agnes 3.0 Flash](https://agnes-ai.com/zh-Hans/docs/agnes-30-flash) text models accept public HTTP(S) image URLs only in Miao. This text-model Vision restriction does not apply to Agnes Image generation, where local JPEG, PNG, and WEBP inputs are converted to Data URI.
+
+Agnes Video 2.5 Flash generates at 720P for 4–12 seconds. Image-to-video and reference-to-video accept public HTTPS image or audio URLs only; local uploads, reference videos, and explicit audio-track control are not supported. Agnes availability and rate limits depend on your account tier; see the official documentation for current limits.
 
 ### Optional TOS for Seedance local references
 
@@ -177,6 +195,7 @@ flowchart LR
   ark[Volcengine Ark]
   ds[DeepSeek]
   zai[Z.ai]
+  agnes[Agnes]
 
   ui --> nitro
   electron --> nitro
@@ -184,10 +203,11 @@ flowchart LR
   nitro --> ark
   nitro --> ds
   nitro --> zai
+  nitro --> agnes
 ```
 
 - `app/` — Vue pages, canvas, agent chat
-- `server/` — APIs, in-process agent loop, Ark / DeepSeek / Z.ai adapters
+- `server/` — APIs, in-process agent loop, Ark / DeepSeek / Z.ai / Agnes adapters
 - `shared/` — model catalogs and types
 - `electron/` — macOS shell: isolated Nitro on a random loopback port, per-launch token, no Node in the renderer
 
@@ -233,6 +253,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) / [简体中文](CONTRIBUTING.zh-CN.md). 
 ```sh
 pnpm lint
 pnpm typecheck
+pnpm test:llm
 pnpm test:sqlite
 pnpm test:electron-main
 ```

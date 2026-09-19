@@ -13,14 +13,29 @@ function loadHandler(overrides = {}) {
     defineEventHandler: fn => fn,
     readBody: async event => event.body,
     readServiceSettings: () => ({}),
-    publicServiceStatus: () => ({ imageReady: true, videoReady: true }),
-    resolveMediaGenerationBackend: model => model.startsWith('seedream/')
-      ? { provider: 'ark-image', backendModelId: 'doubao-seedream-5-0-pro-260628', protocolVersion: 'ark-images-sync-v1' }
-      : { provider: 'ark-video', backendModelId: 'doubao-seedance-2-0-260128', protocolVersion: 'ark-video-tasks-v1' },
+    publicServiceStatus: () => ({
+      imageReady: true,
+      videoReady: true,
+      providers: { ark: { ok: true }, agnes: { ok: true } },
+    }),
+    canonicalizeAgnesImageModelId: model => String(model || '').replace('image-2.0-flash', 'image-2.5-flash'),
+    resolveMediaGenerationBackend: (model) => {
+      if (model.startsWith('seedream/'))
+        return { provider: 'ark-image', backendModelId: 'doubao-seedream-5-0-pro-260628', protocolVersion: 'ark-images-sync-v1' }
+      if (model.startsWith('bytedance/'))
+        return { provider: 'ark-video', backendModelId: 'doubao-seedance-2-0-260128', protocolVersion: 'ark-video-tasks-v1' }
+      if (model.startsWith('agnes/image-'))
+        return { provider: 'agnes-image', backendModelId: 'agnes-image-2.5-flash', protocolVersion: 'agnes-images-sync-v1' }
+      return { provider: 'agnes-video', backendModelId: 'agnes-video-2.5-flash', protocolVersion: 'agnes-video-tasks-v1' }
+    },
+    sanitizeAgnesImageInput: (_model, input) => ({ ...input, agnesImage: true }),
+    sanitizeAgnesVideoInput: (_model, input) => ({ ...input, agnesVideo: true }),
+    materializeAgnesVideoSources: async raw => raw,
     sanitizeArkImageInput: (_model, input) => ({ ...input, image: true }),
     sanitizeArkVideoInput: (_model, input) => ({ ...input, video: true }),
     connectDatabase: async () => {},
     resolveProject: async () => ({ _id: 'project' }),
+    assertProjectWritable: async () => {},
     newLocalTaskId: () => 'task',
     GenerationJob: {
       async create(value) {
@@ -60,9 +75,74 @@ test('direct Seedance generation snapshots the Ark video backend', async () => {
 })
 
 test('direct generation rejects media when Ark readiness is false', async () => {
-  const { handler, created } = loadHandler({ publicServiceStatus: () => ({ imageReady: false, videoReady: false }) })
+  const { handler, created } = loadHandler({
+    publicServiceStatus: () => ({
+      imageReady: true,
+      videoReady: true,
+      providers: { ark: { ok: false }, agnes: { ok: true } },
+    }),
+  })
   await assert.rejects(handler({ body: { model: 'seedream/5-pro-text-to-image', input: { prompt: 'x' } } }), error => error.statusCode === 503)
   assert.equal(created.length, 0)
+})
+
+test('direct Agnes generation snapshots Agnes and requires Agnes readiness', async () => {
+  const { handler, created } = loadHandler()
+  await handler({ body: { model: 'agnes/image-2.0-flash-text-to-image', input: { prompt: 'x' } } })
+  assert.equal(created[0].provider, 'agnes-image')
+  assert.equal(created[0].model, 'agnes/image-2.5-flash-text-to-image')
+  assert.equal(created[0].backendModelId, 'agnes-image-2.5-flash')
+  assert.ok(created[0].requestBody.agnesImage)
+  assert.ok(created[0].providerMetadata.agnesImage)
+
+  const unavailable = loadHandler({
+    publicServiceStatus: () => ({
+      imageReady: true,
+      videoReady: true,
+      providers: { ark: { ok: true }, agnes: { ok: false } },
+    }),
+  })
+  await assert.rejects(
+    unavailable.handler({ body: { model: 'agnes/video-2.5-flash-text-to-video', input: { prompt: 'x' } } }),
+    error => error.statusCode === 503,
+  )
+  assert.equal(unavailable.created.length, 0)
+})
+
+test('direct Agnes video remaps local stills before sanitize and Seedance does not', async () => {
+  const local = '/media/generator/results/job/0.png'
+  const { handler, created } = loadHandler({
+    materializeAgnesVideoSources: async (raw) => ({
+      ...raw,
+      first_frame_url: raw.first_frame_url === local ? 'https://cdn.example/out.png' : raw.first_frame_url,
+    }),
+  })
+  await handler({
+    body: {
+      model: 'agnes/video-2.5-flash-image-to-video',
+      category: 'Video',
+      task: 'Image to Video',
+      input: { prompt: 'orbit', first_frame_url: local },
+    },
+  })
+  assert.equal(created[0].input.first_frame_url, 'https://cdn.example/out.png')
+  assert.ok(created[0].requestBody.agnesVideo)
+
+  const seedance = loadHandler({
+    materializeAgnesVideoSources: async () => {
+      throw new Error('Seedance must not remap Agnes origins')
+    },
+  })
+  await seedance.handler({
+    body: {
+      model: 'bytedance/seedance-2-image-to-video',
+      category: 'Video',
+      task: 'Image to Video',
+      input: { prompt: 'orbit', first_frame_url: local },
+    },
+  })
+  assert.equal(seedance.created[0].input.first_frame_url, local)
+  assert.ok(seedance.created[0].requestBody.arkVideo)
 })
 
 test('upload endpoint always returns local media storage URL', async () => {

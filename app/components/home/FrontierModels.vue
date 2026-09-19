@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import type { FrontierModelCard } from '@/constants/aiModels'
+import { openFrontierGenerator } from '@/composables/useAiGeneratorForm'
 import { getFrontierModelCards } from '@/constants/aiModels'
 
 const emit = defineEmits<{
   select: [card: FrontierModelCard]
 }>()
 const cards = getFrontierModelCards()
+
+function onSelect(card: FrontierModelCard) {
+  emit('select', card)
+  void openFrontierGenerator(card.modelId)
+}
 </script>
 
 <template>
@@ -25,7 +31,8 @@ const cards = getFrontierModelCards()
         :key="card.modelId"
         type="button"
         class="flex flex-col items-start rounded-2xl border border-border bg-card p-4 text-left shadow-none transition-colors duration-150 hover:border-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:p-5"
-        @click="emit('select', card)"
+        :aria-label="`Open ${card.title} in Generator`"
+        @click="onSelect(card)"
       >
         <img
           v-if="card.logo"
@@ -33,7 +40,7 @@ const cards = getFrontierModelCards()
           alt=""
           width="32"
           height="32"
-          class="mb-3 size-8 object-contain"
+          class="mb-3 h-8 w-auto max-w-[4.5rem] object-contain"
           aria-hidden="true"
         >
         <h3 class="text-base font-medium text-foreground">

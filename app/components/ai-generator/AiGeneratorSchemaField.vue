@@ -23,6 +23,8 @@ const fieldLabelKeys: Record<string, string> = {
   video_urls: 'tools.fields.referenceVideos',
   audio_urls: 'tools.fields.referenceAudio',
   aspect_ratio: 'tools.fields.aspectRatio',
+  ratio: 'tools.fields.aspectRatio',
+  size: 'tools.fields.resolution',
   resolution: 'tools.fields.resolution',
   duration: 'tools.fields.duration',
   generate_audio: 'tools.fields.generateAudio',
@@ -56,6 +58,28 @@ const booleanValue = computed({
   set: value => emit('update:modelValue', value),
 })
 
+const urlValues = computed(() =>
+  (Array.isArray(props.modelValue) ? props.modelValue : [props.modelValue])
+    .filter((value): value is string => typeof value === 'string'),
+)
+
+const singleUrlValue = computed({
+  get: () => urlValues.value[0] ?? '',
+  set: value => emit('update:modelValue', value.trim() ? [value] : []),
+})
+
+const urlListValue = computed({
+  get: () => urlValues.value.join('\n'),
+  set: (value) => {
+    const urls = value
+      .split(/\r?\n/)
+      .map(entry => entry.trim())
+      .filter(Boolean)
+      .slice(0, props.field.property.maxItems)
+    emit('update:modelValue', urls)
+  },
+})
+
 const enumOptions = computed(() =>
   (props.field.property.enum ?? []).map(option => ({
     label: props.field.key === 'duration' ? `${option}s` : String(option),
@@ -63,14 +87,14 @@ const enumOptions = computed(() =>
   })),
 )
 
-const isAspectRatioField = computed(() => props.field.key === 'aspect_ratio')
+const isAspectRatioField = computed(() => props.field.key === 'aspect_ratio' || props.field.key === 'ratio')
 
 const toolbarIcon = computed(() => {
-  if (props.field.key === 'aspect_ratio')
+  if (isAspectRatioField.value)
     return null
   if (props.field.key === 'duration')
     return Clock3
-  if (props.field.key === 'resolution' || props.field.key === 'quality')
+  if (props.field.key === 'resolution' || props.field.key === 'quality' || props.field.key === 'size')
     return Ratio
   return Monitor
 })
@@ -120,6 +144,29 @@ const toolbarIcon = computed(() => {
         </SelectGroup>
       </SelectContent>
     </Select>
+  </template>
+
+  <template v-else-if="field.widget === 'url-list'">
+    <div class="space-y-2">
+      <Label class="text-sm">{{ localizedLabel() }}</Label>
+      <Input
+        v-if="field.property.maxItems === 1"
+        v-model="singleUrlValue"
+        type="url"
+        inputmode="url"
+        placeholder="https://..."
+      />
+      <Textarea
+        v-else
+        v-model="urlListValue"
+        inputmode="url"
+        :placeholder="`https://... (${field.property.maxItems ?? 1} max, one per line)`"
+        class="min-h-20 resize-y"
+      />
+      <p v-if="field.description" class="text-xs text-muted-foreground">
+        {{ field.description }}
+      </p>
+    </div>
   </template>
 
   <template v-else-if="field.widget === 'select'">

@@ -35,6 +35,13 @@ export const PROVIDER_CONFIGS: Record<TextProviderId, AdapterConfig> = {
     imageMaterialization: 'reject',
     capabilities: { vision: false, tools: true, toolChoice: true, parallelToolCalls: false, reasoning: true },
   },
+  agnes: {
+    provider: 'agnes',
+    name: 'Agnes',
+    endpoint: 'https://apihub.agnes-ai.com/v1/chat/completions',
+    imageMaterialization: 'remote-url',
+    capabilities: { vision: true, tools: true, toolChoice: true, parallelToolCalls: false, reasoning: true },
+  },
 }
 
 function requestHeaders(snapshot: LlmSnapshot) {
@@ -68,6 +75,10 @@ export async function buildProviderRequest(
     const stream = options as StreamChatOptions
     body.temperature = 0.4
     const canUseTools = snapshot.capabilities.tools && stream.tools.length > 0
+    const listedRequiredTool = stream.requiredTool
+      && stream.tools.some(tool => Boolean(tool && typeof tool === 'object' && 'function' in tool && (tool as { function?: { name?: string } }).function?.name === stream.requiredTool))
+      ? stream.requiredTool
+      : undefined
     if (canUseTools) {
       // Withholding the tools is supported everywhere; tool_choice "none" is not.
       if (stream.disableTools) {
@@ -76,24 +87,28 @@ export async function buildProviderRequest(
       else {
         body.tools = stream.tools
         if (snapshot.capabilities.toolChoice) {
-          body.tool_choice = stream.requiredTool
-            ? { type: 'function', function: { name: stream.requiredTool } }
+          body.tool_choice = listedRequiredTool
+            ? { type: 'function', function: { name: listedRequiredTool } }
             : 'auto'
         }
-        else if (stream.requiredTool) {
+        else if (listedRequiredTool) {
           throw new Error(`${config.name} does not support required tool choice.`)
         }
         if (snapshot.capabilities.parallelToolCalls)
-          body.parallel_tool_calls = !stream.requiredTool
+          body.parallel_tool_calls = !listedRequiredTool
       }
     }
-    forcedTool = Boolean(canUseTools && !stream.disableTools && stream.requiredTool)
+    forcedTool = Boolean(canUseTools && !stream.disableTools && listedRequiredTool)
   }
 
   if (snapshot.provider === 'zai') {
     // Z.ai rejects a forced tool_choice while thinking is enabled.
     body.thinking = { type: forcedTool ? 'disabled' : 'enabled' }
     body.reasoning_effort = kind === 'stream' ? 'high' : 'low'
+  }
+  else if (snapshot.provider === 'agnes') {
+    // The recorded 2.5 Flash probe confirms reasoning_content and forced tools work together.
+    body.chat_template_kwargs = { enable_thinking: kind === 'stream' }
   }
 
   return {
@@ -140,4 +155,5 @@ export const LLM_ADAPTERS: Record<TextProviderId, LlmAdapter> = {
   ark: createAdapter(PROVIDER_CONFIGS.ark),
   deepseek: createAdapter(PROVIDER_CONFIGS.deepseek),
   zai: createAdapter(PROVIDER_CONFIGS.zai),
+  agnes: createAdapter(PROVIDER_CONFIGS.agnes),
 }

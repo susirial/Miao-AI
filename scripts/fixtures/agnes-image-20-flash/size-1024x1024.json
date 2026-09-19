@@ -1,0 +1,23 @@
+{
+  "request": {
+    "size": "1024x1024"
+  },
+  "response": {
+    "status": 200,
+    "payload": {
+      "data": [
+        {
+          "url": "[REMOTE_URL]",
+          "b64_json": "",
+          "revised_prompt": ""
+        }
+      ],
+      "created": "[TIMESTAMP]",
+      "task_id": "[ID]"
+    }
+  },
+  "requestedSize": "1024x1024",
+  "actualSize": "1024x1024",
+  "ratioError": 0,
+  "supported": true
+}

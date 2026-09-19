@@ -968,7 +968,7 @@ function setActiveAgent(value: unknown) {
                   :class="mentionColumn === 'models' && index === mentionIndex ? 'bg-accent text-accent-foreground' : ''"
                   @click="selectModel(model)"
                 >
-                  <img v-if="agentModelLogo(model)" :src="agentModelLogo(model)" alt="" class="size-6 shrink-0 object-contain">
+                  <img v-if="agentModelLogo(model)" :src="agentModelLogo(model)" alt="" class="h-6 w-auto max-w-14 shrink-0 object-contain">
                   <Icon v-else :name="model.icon || 'lucide:box'" class="size-6 shrink-0" />
                   <span class="min-w-0 flex-1"><span class="block truncate text-sm font-medium">{{ model.name }}</span><span class="block text-xs text-muted-foreground">{{ model.task }}</span></span>
                 </button>

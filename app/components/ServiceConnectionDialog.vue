@@ -5,13 +5,17 @@ import { TEXT_MODEL_CATALOG } from '~~/shared/constants/modelCatalog'
 import { useServiceConnection } from '~/composables/useServiceConnection'
 
 interface ConnectionStatus {
-  version: 3
+  version: 4
   revision: string
   connected: boolean
   textReady: boolean
   imageReady: boolean
   videoReady: boolean
   selectedTextModel: string
+  selectedImageFamily: string
+  selectedVideoFamily: string
+  selectedImageReady: boolean
+  selectedVideoReady: boolean
   selectedTextProvider: ProviderId
   selectedTextCapabilities: {
     vision: boolean
@@ -36,8 +40,8 @@ interface TestResult {
   mediaGenerationVerified?: false
 }
 
-type TestResults = Record<'ark' | 'deepSeek' | 'zai' | 'tos', TestResult>
-type KeyField = 'arkKey' | 'deepSeekKey' | 'zaiKey'
+type TestResults = Record<'ark' | 'deepSeek' | 'zai' | 'agnes' | 'tos', TestResult>
+type KeyField = 'arkKey' | 'deepSeekKey' | 'zaiKey' | 'agnesKey'
 
 const status = ref<ConnectionStatus | null>(null)
 const { dialogOpen: open } = useServiceConnection()
@@ -48,6 +52,7 @@ const keys = reactive<Record<KeyField, string>>({
   arkKey: '',
   deepSeekKey: '',
   zaiKey: '',
+  agnesKey: '',
 })
 const selectedTextModel = ref(TEXT_MODEL_CATALOG[0]!.id)
 const tosOpen = ref(false)
@@ -65,7 +70,9 @@ function providerLabel(provider: ProviderId) {
     return t('service.providerArk')
   if (provider === 'deepseek')
     return t('service.providerDeepSeek')
-  return t('service.providerZai')
+  if (provider === 'zai')
+    return t('service.providerZai')
+  return t('service.providerAgnes')
 }
 
 function modelDescription(model: (typeof TEXT_MODEL_CATALOG)[number]) {
@@ -78,6 +85,7 @@ const keyFields = computed(() => [
   { field: 'arkKey' as const, provider: 'ark' as const, label: t('service.arkApiKey'), placeholder: t('service.arkApiKeyPlaceholder'), href: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey' },
   { field: 'deepSeekKey' as const, provider: 'deepseek' as const, label: t('service.deepSeekApiKey'), placeholder: t('service.deepSeekApiKeyPlaceholder'), href: 'https://platform.deepseek.com/api_keys' },
   { field: 'zaiKey' as const, provider: 'zai' as const, label: t('service.zaiApiKey'), placeholder: t('service.zaiApiKeyPlaceholder'), href: 'https://z.ai/manage-apikey/apikey-list' },
+  { field: 'agnesKey' as const, provider: 'agnes' as const, label: t('service.agnesApiKey'), placeholder: t('service.agnesApiKeyPlaceholder'), href: 'https://platform.agnes-ai.com/' },
 ])
 
 function showSavedKeys() {
@@ -101,6 +109,7 @@ const resultRows = computed(() => results.value
       { id: 'ark', label: t('service.providerArk'), result: results.value.ark },
       { id: 'deepseek', label: t('service.providerDeepSeek'), result: results.value.deepSeek },
       { id: 'zai', label: t('service.providerZai'), result: results.value.zai },
+      { id: 'agnes', label: t('service.providerAgnes'), result: results.value.agnes },
       { id: 'tos', label: 'TOS', result: results.value.tos },
     ].filter(row => !row.result.skipped)
   : [])
@@ -161,6 +170,14 @@ function providerState(provider: ProviderId) {
   return 'Not configured'
 }
 
+function providerCapabilityDescription(provider: ProviderId) {
+  if (provider === 'ark')
+    return t('service.arkCapabilities')
+  if (provider === 'agnes')
+    return t('service.agnesCapabilities')
+  return ''
+}
+
 async function testConnection() {
   testing.value = true
   results.value = null
@@ -176,6 +193,7 @@ async function testConnection() {
         arkKey: submittedKey('arkKey'),
         deepSeekKey: submittedKey('deepSeekKey'),
         zaiKey: submittedKey('zaiKey'),
+        agnesKey: submittedKey('agnesKey'),
         tosAccessKeyId: submittedTosSecret(tos.accessKeyId),
         tosSecretAccessKey: submittedTosSecret(tos.secretAccessKey),
         tosBucket: tos.bucket,
@@ -248,7 +266,10 @@ async function testConnection() {
                 {{ modelDescription(selectedModel) }}
               </p>
               <p v-if="selectedModel.id === 'zai/glm-5.3'" class="mt-2 text-xs text-warning">
-                GLM 5.3 is text-only. Switch to Seed or DeepSeek before sending images.
+                {{ t('service.glmVisionWarning') }}
+              </p>
+              <p v-if="selectedModel.provider === 'agnes'" class="mt-2 text-xs text-warning">
+                {{ t('service.agnesVisionWarning') }}
               </p>
             </div>
           </section>
@@ -275,6 +296,9 @@ async function testConnection() {
                   <CheckCircle2 v-if="status?.providers[item.provider].ok" class="size-3 text-success" />
                   <Circle v-else class="size-3" />
                   {{ providerState(item.provider) }}
+                </p>
+                <p v-if="providerCapabilityDescription(item.provider)" class="text-[11px] leading-relaxed text-muted-foreground">
+                  {{ providerCapabilityDescription(item.provider) }}
                 </p>
               </div>
             </div>

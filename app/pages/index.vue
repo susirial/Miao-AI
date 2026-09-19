@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ArrowRight } from 'lucide-vue-next'
+import { generatorLocationForModel } from '~~/shared/utils/generatorRoutes'
+import { applyGeneratorSelection } from '@/composables/useAiGeneratorForm'
 import { getFrontierModelCards } from '@/constants/aiModels'
 
 definePageMeta({
@@ -9,7 +11,11 @@ definePageMeta({
 const { t } = useI18n()
 const localePath = useLocalePath()
 const { public: publicConfig } = useRuntimeConfig()
-const models = getFrontierModelCards().slice(0, 6)
+const models = getFrontierModelCards()
+
+function modelCardTo(card: (typeof models)[number]) {
+  return localePath(generatorLocationForModel({ id: card.modelId, task: card.task }))
+}
 const currentYear = new Date().getFullYear()
 
 const featured = computed(() => ({
@@ -106,8 +112,15 @@ useSeoMeta({
             </p>
           </div>
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <div v-for="model in models" :key="model.modelId" class="flex min-h-24 flex-col justify-between rounded-xl border border-border bg-background p-4">
-              <img v-if="model.logo" :src="model.logo" alt="" class="size-7 object-contain" aria-hidden="true">
+            <NuxtLink
+              v-for="model in models"
+              :key="model.modelId"
+              :to="modelCardTo(model)"
+              :aria-label="`Open ${model.title} in Generator`"
+              class="flex min-h-24 flex-col justify-between rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              @click="applyGeneratorSelection(model.modelId)"
+            >
+              <img v-if="model.logo" :src="model.logo" alt="" class="h-7 w-auto max-w-16 object-contain" aria-hidden="true">
               <span v-else class="font-mono text-[11px] text-muted-foreground">{{ model.task }}</span>
               <div class="mt-4">
                 <p class="text-sm font-medium">
@@ -117,7 +130,7 @@ useSeoMeta({
                   {{ model.task }}
                 </p>
               </div>
-            </div>
+            </NuxtLink>
           </div>
         </div>
       </section>

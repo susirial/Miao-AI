@@ -1,5 +1,15 @@
 import type { ServiceCapability } from '~~/shared/types/provider'
 
+type MediaProvider = 'ark' | 'agnes'
+
+function mediaProviderForModel(modelId: string): MediaProvider | null {
+  if (modelId.startsWith('agnes/image-') || modelId.startsWith('agnes/video-'))
+    return 'agnes'
+  if (modelId.startsWith('seedream/') || modelId.startsWith('bytedance/seedance-'))
+    return 'ark'
+  return null
+}
+
 export function useServiceConnection() {
   const dialogOpen = useState<boolean>('service-connection-dialog', () => false)
 
@@ -14,6 +24,7 @@ export function useServiceConnection() {
         textReady: boolean
         imageReady: boolean
         videoReady: boolean
+        providers: Record<MediaProvider, { ok: boolean }>
       }>('/api/settings/services', { timeout: 5000 })
     }
     catch {
@@ -42,5 +53,14 @@ export function useServiceConnection() {
     return false
   }
 
-  return { dialogOpen, openDialog, ensureCapability, ensureConnected }
+  async function ensureMediaModel(modelId: string) {
+    const provider = mediaProviderForModel(modelId)
+    const status = await readStatus()
+    if (provider && status?.providers[provider]?.ok)
+      return true
+    openDialog()
+    return false
+  }
+
+  return { dialogOpen, openDialog, ensureCapability, ensureConnected, ensureMediaModel }
 }

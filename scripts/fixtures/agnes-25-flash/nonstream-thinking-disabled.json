@@ -1,0 +1,30 @@
+{
+  "id": "[ID]",
+  "created": "[CREATED]",
+  "model": "agnes-2.5-flash",
+  "object": "chat.completion",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Tool use enables AI models to perform specific actions, such as searching the web or executing code, to gather information or complete tasks beyond simple text generation.",
+        "role": "assistant"
+      },
+      "provider_specific_fields": {
+        "matched_stop": 248046
+      }
+    }
+  ],
+  "usage": {
+    "completion_tokens": 31,
+    "prompt_tokens": 295,
+    "total_tokens": 326,
+    "prompt_tokens_details": {
+      "cached_tokens": 256
+    }
+  },
+  "metadata": {
+    "weight_version": "default"
+  }
+}

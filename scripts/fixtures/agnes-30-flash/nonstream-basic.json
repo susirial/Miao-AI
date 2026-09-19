@@ -1,0 +1,34 @@
+{
+  "id": "[ID]",
+  "created": "[CREATED]",
+  "model": "agnes-3.0-flash",
+  "object": "chat.completion",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "OK",
+        "role": "assistant"
+      },
+      "provider_specific_fields": {
+        "matched_stop": 248046
+      }
+    }
+  ],
+  "usage": {
+    "completion_tokens": 2,
+    "prompt_tokens": 79,
+    "total_tokens": 81
+  },
+  "metadata": {
+    "weight_version": "default",
+    "weight_versions": [
+      {
+        "version": "default",
+        "start": 0,
+        "end": 2
+      }
+    ]
+  }
+}

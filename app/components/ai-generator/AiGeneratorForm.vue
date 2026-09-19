@@ -23,7 +23,7 @@ const route = useRoute()
 const { t } = useI18n()
 const localePath = useLocalePath()
 const { projects, selectedProjectId, createProject } = useProjects()
-const { availableModels, selectedModelId, selectedModel, formValues, uploadFields, itemsForField, primaryFields, toolbarFields, advancedFields, canGenerate, isUploading, isSubmitting, setFieldValue, addUploadedFiles, removeUploadedItem, handleGenerate } = useAiGeneratorForm()
+const { availableModels, selectedModelId, selectedModel, selectGeneratorModel, formValues, uploadFields, itemsForField, primaryFields, toolbarFields, advancedFields, canGenerate, isUploading, isSubmitting, setFieldValue, addUploadedFiles, removeUploadedItem, handleGenerate } = useAiGeneratorForm()
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const activeUploadField = ref('')
 const advancedOpen = ref(false)
@@ -43,6 +43,7 @@ function uploadLabel(key: string, fallback: string) {
   return translationKey ? t(translationKey) : fallback
 }
 const promptField = computed(() => primaryFields.value.find(field => field.widget === 'textarea'))
+const urlFields = computed(() => primaryFields.value.filter(field => field.widget === 'url-list'))
 const frameUploadsSideBySide = computed(() => uploadFields.value.some(field => field.key === 'first_frame_url')
   && uploadFields.value.some(field => field.key === 'last_frame_url'))
 const activeUploadAccept = computed(() => uploadFields.value.find(field => field.key === activeUploadField.value)?.property['x-accept']
@@ -64,7 +65,7 @@ function onFilesSelected(event: Event) {
 }
 const selectedModelLogo = computed(() => getModelCompanyLogo(selectedModel.value?.name))
 function onModelChange(value: string | number) {
-  selectedModelId.value = String(value)
+  selectGeneratorModel(String(value))
 }
 function onProjectChange(value: string | number) {
   selectedProjectId.value = String(value)
@@ -144,6 +145,15 @@ watch(lockedProjectId, (id) => {
           </div>
 
           <AiGeneratorSchemaField
+            v-for="field in urlFields"
+            :key="field.key"
+            :field="field"
+            :model-value="formValues[field.key]"
+            variant="primary"
+            @update:model-value="setFieldValue(field.key, $event)"
+          />
+
+          <AiGeneratorSchemaField
             v-if="promptField"
             :field="promptField"
             :model-value="formValues[promptField.key]"
@@ -171,7 +181,7 @@ watch(lockedProjectId, (id) => {
                     alt=""
                     width="16"
                     height="16"
-                    class="size-4 shrink-0 object-contain"
+                    class="h-4 w-auto max-w-10 shrink-0 object-contain"
                     aria-hidden="true"
                   >
                   {{ selectedModel?.name || t('tools.selectModel') }}
@@ -199,7 +209,7 @@ watch(lockedProjectId, (id) => {
                         alt=""
                         width="16"
                         height="16"
-                        class="size-4 shrink-0 object-contain"
+                        class="h-4 w-auto max-w-10 shrink-0 object-contain"
                         aria-hidden="true"
                       >
                       {{ model.name }}

@@ -3,7 +3,10 @@ import type { AiCategory, AiFormValues, AiTask, FieldConfig } from '@/types/aiMo
 import { FetchError } from 'ofetch'
 import { toast } from 'vue-sonner'
 import { isGenerationActive, isGenerationQueued, isGenerationTerminal } from '~~/shared/types/generation'
+import { DEFAULT_IMAGE_FAMILY, DEFAULT_VIDEO_FAMILY, isImageFamilyId, isVideoFamilyId } from '~~/shared/constants/modelCatalog'
 import { readErrorMessage } from '~~/shared/utils/apiError'
+import { resolveGeneratorModelId } from '~~/shared/utils/generatorModelSelection'
+import { generatorLocationForModel } from '~~/shared/utils/generatorRoutes'
 import { useToolAgent } from '@/composables/useToolAgent'
 import { AI_CATEGORIES, AI_MODELS, AI_TASKS } from '@/constants/aiModels'
 import { createDefaultValues, getFieldsByPlacement, getInputSchema, isFormValid, mergePreservedValues, parseFieldConfigs } from '@/lib/aiModelSchema'
@@ -168,24 +171,48 @@ export function useAiGeneratorTask() {
     categoryTasks,
   }
 }
+function useGeneratorSelectionMemory() {
+  return {
+    selectedModelId: useState('ai-generator-model', () => AI_MODELS[0]?.id ?? ''),
+    userPickedModel: useState('ai-generator-user-picked', () => false),
+    explicitModelId: useState('ai-generator-explicit-model-id', () => ''),
+    selectedImageFamily: useState('ai-generator-image-family', () => DEFAULT_IMAGE_FAMILY),
+    selectedVideoFamily: useState('ai-generator-video-family', () => DEFAULT_VIDEO_FAMILY),
+  }
+}
+
 export function applyGeneratorSelection(modelId: string) {
   const model = AI_MODELS.find(item => item.id === modelId)
   if (!model)
     return false
   const selectedCategory = useState<AiCategory>('ai-generator-category', () => 'Image')
   const selectedTask = useState<AiTask>('ai-generator-task', () => AI_MODELS[0]?.task ?? 'Image to Image')
-  const selectedModelId = useState('ai-generator-model', () => AI_MODELS[0]?.id ?? '')
+  const { selectedModelId, userPickedModel, explicitModelId } = useGeneratorSelectionMemory()
+  userPickedModel.value = true
+  explicitModelId.value = model.id
   selectedModelId.value = model.id
   selectedCategory.value = model.category
   selectedTask.value = model.task
   return true
 }
+
+export function openFrontierGenerator(modelId: string) {
+  if (!applyGeneratorSelection(modelId))
+    return
+  const model = AI_MODELS.find(item => item.id === modelId)
+  if (!model)
+    return
+  return navigateTo(generatorLocationForModel(model))
+}
 export function useAiGeneratorForm() {
   const { selectedCategory } = useAiGeneratorCategory()
   const { selectedTask, availableTasks } = useAiGeneratorTask()
   const { selectedProjectId } = useProjects()
+  const { ensureMediaModel } = useServiceConnection()
   const { startToolAgent } = useToolAgent()
-  const selectedModelId = useState('ai-generator-model', () => AI_MODELS[0]?.id ?? '')
+  const route = useRoute()
+  const { selectedModelId, userPickedModel, explicitModelId, selectedImageFamily, selectedVideoFamily } = useGeneratorSelectionMemory()
+  const readyProviders = useState('ai-generator-ready-providers', () => ({ ark: true, agnes: true }))
   const formValues = ref<AiFormValues>({})
   const uploadedByField = ref<Record<string, GeneratorUploadItem[]>>({})
   const uploadRequests = new Map<string, XMLHttpRequest>()
@@ -323,10 +350,47 @@ export function useAiGeneratorForm() {
     const matchingModels = AI_MODELS.filter(model => model.category === selectedCategory.value
       && model.task === selectedTask.value)
     const currentName = AI_MODELS.find(model => model.id === selectedModelId.value)?.name
-    const nextModel = matchingModels.find(model => model.id === selectedModelId.value)
-      ?? matchingModels.find(model => model.name === currentName)
-      ?? matchingModels[0]
-    selectedModelId.value = nextModel?.id ?? ''
+    selectedModelId.value = resolveGeneratorModelId({
+      models: matchingModels,
+      catalog: AI_MODELS,
+      explicitModelId: userPickedModel.value ? explicitModelId.value || selectedModelId.value : '',
+      imageFamily: selectedImageFamily.value,
+      videoFamily: selectedVideoFamily.value,
+      previousModelName: currentName,
+      readyProviders: readyProviders.value,
+    })
+  }
+
+  function selectGeneratorModel(modelId: string) {
+    if (!availableModels.value.some(model => model.id === modelId))
+      return
+    userPickedModel.value = true
+    explicitModelId.value = modelId
+    selectedModelId.value = modelId
+  }
+
+  async function loadMediaFamilyPreferences() {
+    try {
+      const status = await $fetch<{
+        selectedImageFamily?: string
+        selectedVideoFamily?: string
+        providers?: { ark?: { ok?: boolean }, agnes?: { ok?: boolean } }
+      }>('/api/settings/services')
+      if (isImageFamilyId(status.selectedImageFamily))
+        selectedImageFamily.value = status.selectedImageFamily
+      if (isVideoFamilyId(status.selectedVideoFamily))
+        selectedVideoFamily.value = status.selectedVideoFamily
+      readyProviders.value = {
+        ark: Boolean(status.providers?.ark?.ok),
+        agnes: Boolean(status.providers?.agnes?.ok),
+      }
+      if (userPickedModel.value)
+        return
+      syncModelForTask()
+    }
+    catch {
+      // Preferences stay at Ark defaults until service status is available.
+    }
   }
   function syncSelectionForCategory() {
     const tasks = availableTasks.value
@@ -501,6 +565,8 @@ export function useAiGeneratorForm() {
     if (isUploading.value || isSubmitting.value || !canGenerate.value || !selectedModel.value) {
       return
     }
+    if (!await ensureMediaModel(selectedModel.value.id))
+      return
 
     const payload = Object.fromEntries(fields.value.map(field => [field.key, formValues.value[field.key]]))
     isSubmitting.value = true
@@ -547,7 +613,15 @@ export function useAiGeneratorForm() {
     startPolling(job.taskId)
   }
   onMounted(() => {
+    const queryModel = typeof route.query.model === 'string'
+      ? route.query.model
+      : typeof route.query.agentModel === 'string'
+        ? route.query.agentModel
+        : ''
+    if (queryModel)
+      applyGeneratorSelection(queryModel)
     void loadRecentJobs()
+    void loadMediaFamilyPreferences()
   })
 
   return {
@@ -559,6 +633,7 @@ export function useAiGeneratorForm() {
     selectedTask,
     selectedModelId,
     selectedModel,
+    selectGeneratorModel,
     formValues,
     uploadFields,
     itemsForField,

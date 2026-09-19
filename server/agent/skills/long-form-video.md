@@ -31,23 +31,25 @@ These presets belong exclusively to this long-form production workflow. They are
 - High quality: Seedream 5.0 Pro stills at 2K; Seedance 2.0 clips, up to 1080p.
 - Economy: Seedream 5.0 Pro stills at 1K; Seedance 2.0 clips, initially 480p.
 - Hobby: Seedream 5.0 Pro stills at 1K; Seedance 2.0 clips, initially 480p.
+- Agnes: Agnes Image 2.5 Flash stills; Agnes Video 2.5 Flash clips at 720p, fixed ratios, no `generate_audio`. Only offer this when both Agnes image and video keys are ready.
 - Custom: use the exact registered models selected for the film. Resolve missing model choices before production; use only documented schema defaults and request missing source media.
 
-For this preset workflow, default video resolution is 480p unless the user specifies a higher supported resolution. Registered custom models use their own schema defaults.
+For Ark preset workflow, default video resolution is 480p unless the user specifies a higher supported resolution. Agnes presets stay on 720p. Registered custom models use their own schema defaults.
 
 ## Model preference (before family-specific settings)
 
 The composer has no model-preference menu. When the user requests a new long video, the **first ask_user call must contain only the `model_preference` question**, before any topic, audience, style, sound, language, duration, parameter, or storyboard questions. Wait for its answer or explicit skip before moving on. The current runtime quality is a fallback, not evidence that the user chose it for this film. Automatic generation confirmation does not skip this card.
 
-Use question id **`model_preference`** and these exact option ids (localize labels and descriptions to the user's language):
+Use question id **`model_preference`**. The runtime replaces the options with the ready stacks. Call ask_user with that question id; do not invent Seedance-only menus. Localized labels should match these option ids when they are present:
 
-- `high` — **High quality**: Seedream 5.0 Pro at 2K for stills; Seedance 2.0 up to 1080p for video.
-- `economy` — **Economy**: Seedream 5.0 Pro at 1K for stills; Seedance 2.0 initially at 480p for video.
-- `hobby` — **Hobby**: Seedream 5.0 Pro at 1K for stills; Seedance 2.0 initially at 480p for video.
+- `ark-economy` — **Economy**: Seedream 5.0 Pro at 1K for stills; Seedance 2.0 initially at 480p for video.
+- `ark-high` — **High quality**: Seedream 5.0 Pro at 2K for stills; Seedance 2.0 up to 1080p for video.
+- `ark-hobby` — **Hobby**: Seedream 5.0 Pro at 1K for stills; Seedance 2.0 initially at 480p for video.
+- `agnes` — **Agnes**: Image 2.5 Flash + Video 2.5 Flash (only when both Agnes media keys are ready).
 - `custom` — **Custom**: use models the user specifies; resolve the exact image and video models before production.
 - `other` — **Other**, with `allow_custom: true`, for a custom model combination or requirement.
 
-Put the best fit first and set `recommended` to a preset option id (`high`, `economy`, or `hobby`), usually `economy` unless the brief suggests another. Explain the recommended combination briefly. The runtime applies a selected preset, or the recommendation when the card/question is skipped, before continuing. Custom/Other switches to registered model tools; clarify unspecified models with ask_user and use their actual schemas. Do not interpret an empty custom answer as permission to invent model selections.
+Put the best fit first and set `recommended` to `ark-economy` when Ark is ready. Explain the recommended combination briefly. The runtime applies a selected preset, or the recommendation when the card/question is skipped, before continuing. Custom/Other switches to registered model tools; clarify unspecified models with ask_user and use their actual schemas. Do not interpret an empty custom answer as permission to invent model selections. After an Ark or Agnes stack is chosen, offer only that family's legal parameter values.
 
 Do not repeat a model-preference card already answered for this film. Honor explicit @ models without asking the user to replace them; resolve any still/video role that remains unspecified through model-planning, using registered tools. If the user has already named a preset or delegated the setup without a card, use the matching registered models and actual schemas directly, stating the setup; do not assume an unsubmitted card changed runtime quality. Do not replace explicitly chosen models on retries or follow-up messages.
 
@@ -74,9 +76,10 @@ For preset tools, the runtime maps the card's confirmed preference to the video 
 
 | Preference | Family | Resolution | Aspect ratio | Duration | Audio | R2V caps |
 |---|---|---|---|---|---|---|
-| Economy | Seedance 2.0 | 480p, 720p, 1080p, 4k | 16:9, 9:16, 1:1, 4:3, 3:4, 21:9, adaptive | 4–15s | `generate_audio` | 9 stills / 3 clips |
-| High quality | Seedance 2.0 | 480p, 720p, 1080p, 4k | same as Economy | 4–15s | `generate_audio` | 9 stills / 3 clips |
-| Hobby | Seedance 2.0 | 480p, 720p, 1080p, 4k | same as Economy | 4–15s | `generate_audio` | 9 stills / 3 clips |
+| ark-economy | Seedance 2.0 | 480p, 720p, 1080p, 4k | 16:9, 9:16, 1:1, 4:3, 3:4, 21:9, adaptive | 4–15s | `generate_audio` | 9 stills / 3 clips |
+| ark-high | Seedance 2.0 | 480p, 720p, 1080p, 4k | same as Economy | 4–15s | `generate_audio` | 9 stills / 3 clips |
+| ark-hobby | Seedance 2.0 | 480p, 720p, 1080p, 4k | same as Economy | 4–15s | `generate_audio` | 9 stills / 3 clips |
+| agnes | Agnes Video 2.5 Flash | 720p only | 21:9, 16:9, 4:3, 1:1, 3:4, 9:16 | 4–12s | omit `generate_audio` | stills only |
 
 Image-to-video: `aspect_ratio` is always `adaptive` (do not offer a clip ratio for I2V). Reference-to-video: they pick a ratio from the table.
 

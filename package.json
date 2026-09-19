@@ -61,10 +61,11 @@
     "release": "release-it",
     "test:electron-risk": "pnpm build && electron scripts/electron-risk-spike.mjs",
     "test:electron-main": "node --test scripts/test-electron-main.mjs",
+    "test:llm": "node --experimental-transform-types --test scripts/test-llm-providers.mjs",
     "desktop:dev": "concurrently --kill-others --success first \"pnpm dev\" \"wait-on http-get://localhost:3001/api/agent/health && MIAO_ELECTRON_DEV_URL=http://localhost:3001 electron .\"",
     "desktop:dir": "pnpm build && electron-builder --mac dir",
     "desktop:build": "pnpm build && electron-builder --mac",
-    "test:sqlite": "node --experimental-transform-types --test scripts/test-sqlite.mjs scripts/test-data-paths.mjs scripts/test-agent-history.mjs scripts/test-agent-media-routing.mjs scripts/test-agent-optimistic.mjs scripts/test-agent-generation-state.mjs scripts/test-agent-session-delete.mjs scripts/test-agent-tool-transcript.mjs scripts/test-canvas-bulk.mjs scripts/test-local-data-migration.mjs scripts/test-local-generation-queue.mjs scripts/test-service-settings.mjs scripts/test-media-backend-registry.mjs scripts/test-ark-image-backend.mjs scripts/test-ark-video-backend.mjs scripts/test-agent-results-upsert.mjs scripts/test-generation-result-urls.mjs scripts/test-project-delete.mjs",
+    "test:sqlite": "node --experimental-transform-types --test scripts/test-sqlite.mjs scripts/test-data-paths.mjs scripts/test-agent-history.mjs scripts/test-agent-media-routing.mjs scripts/test-agent-optimistic.mjs scripts/test-agent-generation-state.mjs scripts/test-agent-session-delete.mjs scripts/test-agent-tool-transcript.mjs scripts/test-canvas-bulk.mjs scripts/test-local-data-migration.mjs scripts/test-local-generation-queue.mjs scripts/test-service-settings.mjs scripts/test-service-send-gate.mjs scripts/test-media-backend-registry.mjs scripts/test-ark-image-backend.mjs scripts/test-ark-video-backend.mjs scripts/test-agnes-image-backend.mjs scripts/test-agnes-video-backend.mjs scripts/test-agnes-probe-sanitization.mjs scripts/test-agent-results-upsert.mjs scripts/test-generation-direct-flow.mjs scripts/test-generation-result-urls.mjs scripts/test-project-delete.mjs && node --experimental-transform-types --experimental-loader ./scripts/nuxt-alias-hook.mjs --test scripts/test-generator-media-inputs.mjs",
     "test:media": "node --experimental-transform-types --test scripts/test-local-media.mjs scripts/test-agent-upload.mjs scripts/test-media-export.mjs scripts/test-reveal-local-media.mjs"
   },
   "build": {

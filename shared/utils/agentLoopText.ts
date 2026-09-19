@@ -42,3 +42,24 @@ export function wrapAssistantLoopText(input: {
   const thinking = [reasoning, hasToolCalls ? text : ''].filter(Boolean).join('\n\n')
   return `<think>${thinking}</think>${hasToolCalls ? '' : text}`
 }
+
+/** Live stream: reasoning is replaced as a think block; plain content still appends. */
+export function visibleAssistantStreamEvent(input: {
+  reasoning: string
+  text: string
+  contentDelta?: string
+}): { type: 'text_replace' | 'text', delta: string } | null {
+  if (input.reasoning) {
+    return {
+      type: 'text_replace',
+      delta: wrapAssistantLoopText({
+        reasoning: input.reasoning,
+        text: input.text,
+        hasToolCalls: false,
+        askingUser: false,
+      }),
+    }
+  }
+  const contentDelta = input.contentDelta || ''
+  return contentDelta ? { type: 'text', delta: contentDelta } : null
+}

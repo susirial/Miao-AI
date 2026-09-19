@@ -1,6 +1,6 @@
 import type { GenerationJobPublic } from '../../shared/types/generation'
 import type { IGenerationJob, IResultAsset } from '../models/generationJob'
-import { canonicalMediaUrl } from './storedMediaUrl.mjs'
+import { canonicalMediaUrl, storedMediaKey } from './storedMediaUrl.mjs'
 
 export function parseResultUrls(resultJson?: string) {
   if (!resultJson)
@@ -112,6 +112,68 @@ export function generationResultUrls(job: Pick<IGenerationJob, 'state' | 'result
 
 function publicResultUrls(job: IGenerationJob) {
   return generationResultUrls(job)
+}
+
+export function publicHttpsImageUrl(source: string) {
+  const href = publicHttpImageUrl(source)
+  return href.startsWith('https:') ? href : ''
+}
+
+export function publicHttpImageUrl(source: string) {
+  const value = String(source || '').trim()
+  if (!value || storedMediaKey(value) !== null)
+    return ''
+  let url: URL
+  try {
+    url = new URL(value)
+  }
+  catch {
+    return ''
+  }
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  const loopback = hostname === 'localhost'
+    || hostname.endsWith('.localhost')
+    || hostname === '::1'
+    || /^127(?:\.|$)/.test(hostname)
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || loopback)
+    return ''
+  return url.href
+}
+
+export function publicOriginUrlFromJob(
+  job: Pick<IGenerationJob, 'state' | 'deleted' | 'category' | 'resultUrls' | 'resultAssets'>,
+  source: string,
+) {
+  if (job.state !== 'success' || job.deleted || job.category === 'Video')
+    return ''
+  const local = canonicalMediaUrl(source)
+  if (!local || storedMediaKey(local) === null)
+    return ''
+  if (!(job.resultUrls || []).map(canonicalMediaUrl).includes(local))
+    return ''
+  const asset = (job.resultAssets || []).find(item => canonicalMediaUrl(item.localUrl) === local)
+  return asset ? publicHttpImageUrl(asset.sourceUrl) : ''
+}
+
+export function publicOriginUrlsFromJobs(
+  jobs: Array<Pick<IGenerationJob, 'state' | 'deleted' | 'category' | 'resultUrls' | 'resultAssets'>>,
+  sources: string[],
+) {
+  const resolved = new Map<string, string>()
+  for (const source of sources) {
+    const local = canonicalMediaUrl(source)
+    if (!local || resolved.has(source))
+      continue
+    for (const current of jobs) {
+      const origin = publicOriginUrlFromJob(current, local)
+      if (!origin)
+        continue
+      resolved.set(source, origin)
+      resolved.set(local, origin)
+      break
+    }
+  }
+  return resolved
 }
 
 export function toPublicJob(job: IGenerationJob): GenerationJobPublic {
