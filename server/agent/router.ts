@@ -1,6 +1,7 @@
 import type { ChoiceBody, ConfirmBody } from './types'
 import { captureLlmSnapshot, withLlmSnapshot } from '../ai/llm/registry'
 import { assertAgentSecrets } from './env'
+import { isSessionDeletionInFlight, isSessionRemoved } from './sessionTombstones'
 import { handleChat, handleChoice, handleConfirm, handleStop, handleUpload } from './loop'
 import { scheduleSessionResume } from './resume'
 import { createSession, getSession, listSessions, loadSession, publicSession, removeSessionImages, touch } from './session'
@@ -13,6 +14,13 @@ export class AgentHttpError extends Error {
     super(message)
     this.status = status
   }
+}
+function rejectDeletedSession(sessionId?: string) {
+  const id = String(sessionId || '').trim()
+  if (!id)
+    return
+  if (isSessionRemoved(id) || isSessionDeletionInFlight(id))
+    throw new AgentHttpError('This conversation was deleted', 409)
 }
 function parseConfirmBody(body: Record<string, unknown>): ConfirmBody {
   const action = body.action === 'cancel' || body.action === 'abort' || body.action === 'confirm'
@@ -121,8 +129,10 @@ export async function dispatchAgentRequest(input: {
     const queryProject = String(input.query?.projectId || projectId || '')
     const knownIds = String(input.query?.knownSessionIds || '').split(',').filter(Boolean).slice(0, 20)
     const excludedSessionIds = knownIds.filter((id) => {
+      if (isSessionRemoved(id) || isSessionDeletionInFlight(id))
+        return true
       const session = getSession(id)
-      return session && queryProject && String(session.projectId || '') !== queryProject
+      return Boolean(session && queryProject && String(session.projectId || '') !== queryProject)
     })
     return {
       kind: 'json',
@@ -142,6 +152,7 @@ export async function dispatchAgentRequest(input: {
   }
   const sessionMatch = path.match(/^\/v1\/sessions\/([^/]+)$/)
   if (method === 'GET' && sessionMatch) {
+    rejectDeletedSession(sessionMatch[1])
     const session = await loadSession(decodeURIComponent(sessionMatch[1] || ''))
     if (!session)
       throw new AgentHttpError('Session not found', 404)
@@ -164,6 +175,7 @@ export async function dispatchAgentRequest(input: {
   }
   const titleMatch = path.match(/^\/v1\/sessions\/([^/]+)\/title$/)
   if (method === 'POST' && titleMatch) {
+    rejectDeletedSession(titleMatch[1])
     const session = await loadSession(decodeURIComponent(titleMatch[1] || ''))
     if (!session)
       throw new AgentHttpError('Session not found', 404)
@@ -176,6 +188,7 @@ export async function dispatchAgentRequest(input: {
     if (!input.file)
       throw new AgentHttpError('image file is required', 400)
     const requestedSession = String(input.query?.sessionId || '').trim()
+    rejectDeletedSession(requestedSession)
     const uploaded = await handleUpload(requestedSession || undefined, input.file, String(input.query?.name || '').trim())
     return { kind: 'json', status: 200, body: uploaded }
   }
@@ -186,6 +199,7 @@ export async function dispatchAgentRequest(input: {
   }
   if (method === 'POST' && path === '/v1/chat') {
     const body = input.body || {}
+    rejectDeletedSession(typeof body.sessionId === 'string' ? body.sessionId : '')
     const stream = createAgentEventStream(async (emit) => {
       await withLlmSnapshot(llmSnapshot, () => handleChat(String(body.message || ''), typeof body.sessionId === 'string' ? body.sessionId : undefined, body.attachments, emit, undefined, body.quality, body.confirmPolicy, {
         projectId,
@@ -199,6 +213,7 @@ export async function dispatchAgentRequest(input: {
   }
   const confirmMatch = path.match(/^\/v1\/sessions\/([^/]+)\/confirm$/)
   if (method === 'POST' && confirmMatch) {
+    rejectDeletedSession(confirmMatch[1])
     const body = parseConfirmBody(input.body || {})
     const stream = createAgentEventStream(async (emit) => {
       await withLlmSnapshot(llmSnapshot, () => handleConfirm(decodeURIComponent(confirmMatch[1] || ''), body, emit, undefined, { projectId }))
@@ -207,6 +222,7 @@ export async function dispatchAgentRequest(input: {
   }
   const choiceMatch = path.match(/^\/v1\/sessions\/([^/]+)\/choice$/)
   if (method === 'POST' && choiceMatch) {
+    rejectDeletedSession(choiceMatch[1])
     const body = parseChoiceBody(input.body || {})
     const stream = createAgentEventStream(async (emit) => {
       await withLlmSnapshot(llmSnapshot, () => handleChoice(decodeURIComponent(choiceMatch[1] || ''), body, emit, undefined, { projectId }))
@@ -221,7 +237,7 @@ export function agentErrorStatus(error: unknown) {
   const message = error instanceof Error ? error.message : ''
   if (/not found/i.test(message))
     return 404
-  if (/already running|pending/i.test(message))
+  if (/already running|pending|was deleted/i.test(message))
     return 409
   if (/unauthorized/i.test(message))
     return 401

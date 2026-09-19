@@ -2,7 +2,7 @@ import type { AgentRuntimeSnapshot } from '../utils/agentSessionRuntime'
 import type { AgentConfirmPolicy, AgentImage, AgentQuality, ChatMessage, ChoicePayload, ConfirmationPayload } from './types'
 import { getAgentRuntime, listAgentRuntimes, listInflightAgentRuntimes, listPendingConfirmAgentRuntimes, listRecentAutoAgentRuntimes, upsertAgentRuntime } from '../utils/agentSessionRuntime'
 import { parseAgentConfirmPolicy, parseAgentQuality } from './quality'
-import { isSessionRemoved } from './sessionTombstones'
+import { isSessionDeletionInFlight, isSessionRemoved } from './sessionTombstones'
 
 export interface RemotePendingConfirmation {
   payload: ConfirmationPayload
@@ -92,7 +92,7 @@ export async function putStoredSession(input: {
   updatedAt: number
   bffUrl?: string
 }) {
-  if (isSessionRemoved(input.id))
+  if (isSessionRemoved(input.id) || isSessionDeletionInFlight(input.id))
     return
   try {
     await upsertAgentRuntime({

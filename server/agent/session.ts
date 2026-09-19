@@ -17,7 +17,7 @@ import { MAX_TRANSCRIPT_MESSAGES, SESSION_MEMORY_IDLE_MS } from './policy'
 import { sessionMediaPrompt, SYSTEM_PROMPT } from './prompt'
 import { parseAgentQuality } from './quality'
 import { fetchStoredSession, fetchStoredSessionList, putStoredSession } from './sessionStore'
-import { isSessionRemoved, markSessionsRemoved } from './sessionTombstones'
+import { isSessionDeletionInFlight, isSessionRemoved, markSessionsRemoved } from './sessionTombstones'
 import { removeOrphanToolMessages } from './toolTranscript'
 
 export interface PendingToolItem {
@@ -410,6 +410,8 @@ export function createSession(options?: {
   if (isProjectDeletionInFlight(options?.projectId))
     throw Object.assign(new Error('This project is being deleted'), { statusCode: 409 })
   const requested = String(options?.id || '').trim()
+  if (requested && (isSessionRemoved(requested) || isSessionDeletionInFlight(requested)))
+    throw Object.assign(new Error('This conversation was deleted'), { statusCode: 409, statusMessage: 'This conversation was deleted' })
   const id = requested && isSessionId(requested) && !getSession(requested)
     ? requested
     : crypto.randomUUID()
@@ -463,7 +465,7 @@ export function requireSession(id: string) {
   return session
 }
 export function persistNow(session: AgentSession) {
-  if (isSessionRemoved(session.id) || isProjectDeletionInFlight(session.projectId))
+  if (isSessionRemoved(session.id) || isSessionDeletionInFlight(session.id) || isProjectDeletionInFlight(session.projectId))
     return
   sessions.set(session.id, session)
   persist(session)
@@ -616,7 +618,7 @@ export function bootSessions() {
   return [...sessions.values()]
 }
 export function touch(session: AgentSession) {
-  if (isSessionRemoved(session.id) || isProjectDeletionInFlight(session.projectId))
+  if (isSessionRemoved(session.id) || isSessionDeletionInFlight(session.id) || isProjectDeletionInFlight(session.projectId))
     return
   session.updatedAt = Date.now()
   if (session.messages.length > MAX_TRANSCRIPT_MESSAGES)

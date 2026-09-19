@@ -1,6 +1,6 @@
 import type { AgentHistoryImage, AgentHistoryMessage, AgentHistoryPage } from '../../shared/types/agentHistory'
 import { AGENT_TRANSIENT_ERROR_RE, isAgentTransientMessage } from '../../shared/utils/agentHistoryVisibility'
-import { isSessionRemoved } from '../agent/sessionTombstones'
+import { isChatDeleted, isSessionDeletionInFlight, isSessionRemoved } from '../agent/sessionTombstones'
 import { AgentChat } from '../models/agentChat'
 import { AgentHistory } from '../models/agentHistory'
 import { connectDatabase } from './sqlite'
@@ -10,7 +10,14 @@ const historyContent = (content: string) => content.replace(/<\/?think(?:ing)?\s
 const pendingArchives = new Map<string, Promise<void>>()
 
 function sessionIsRemoved(sessionId: string) {
-  return typeof isSessionRemoved === 'function' && isSessionRemoved(sessionId)
+  if (typeof isSessionRemoved === 'function' && isSessionRemoved(sessionId))
+    return true
+  return typeof isSessionDeletionInFlight === 'function' && isSessionDeletionInFlight(sessionId)
+}
+
+async function chatIsDeleted(sessionId: string) {
+  const chat = await AgentChat.findOne({ sessionId }).select('deletedAt')
+  return typeof isChatDeleted === 'function' ? isChatDeleted(chat) : Boolean(chat?.deletedAt)
 }
 export function archiveAgentHistory(sessionId: string, messages: AgentHistoryMessage[], images: AgentHistoryImage[]) {
   if (sessionIsRemoved(sessionId))
@@ -35,10 +42,14 @@ async function archiveBatch(sessionId: string, messages: AgentHistoryMessage[], 
   if (!messages.length || sessionIsRemoved(sessionId))
     return
   await connectDatabase()
+  if (await chatIsDeleted(sessionId))
+    return
   // Preserve the part of an old browser snapshot preceding the runtime transcript.
   const exists = await AgentHistory.exists({ sessionId })
   if (!exists) {
-    const legacy = await AgentChat.findOne({ sessionId }).select('messages images')
+    const legacy = await AgentChat.findOne({ sessionId }).select('messages images deletedAt')
+    if (typeof isChatDeleted === 'function' ? isChatDeleted(legacy) : Boolean(legacy?.deletedAt))
+      return
     if (legacy?.messages?.length) {
       const overlap = legacy.messages.findIndex(row => messages.some(item => item.role === row.role && historyContent(item.content) === historyContent(row.content) && row.content))
       const storedMessages = legacy.toObject().messages
@@ -68,7 +79,7 @@ export async function archiveAgentUiHistory(sessionId: string, messages: AgentHi
   if (sessionIsRemoved(sessionId))
     return
   return withArchiveLock(sessionId, async () => {
-    if (sessionIsRemoved(sessionId))
+    if (sessionIsRemoved(sessionId) || await chatIsDeleted(sessionId))
       return
     await connectDatabase()
     const canonical = await AgentHistory.find({
@@ -97,7 +108,7 @@ export async function archiveAgentUiHistory(sessionId: string, messages: AgentHi
   })
 }
 async function writeHistory(sessionId: string, messages: AgentHistoryMessage[], images: AgentHistoryImage[]) {
-  if (sessionIsRemoved(sessionId))
+  if (sessionIsRemoved(sessionId) || await chatIsDeleted(sessionId))
     return
   if (!messages.length)
     return
@@ -134,13 +145,15 @@ export async function readAgentHistory(sessionId: string, query: {
   if ((before && !/^[a-f\d]{24}$/i.test(before)) || (after && !/^[a-f\d]{24}$/i.test(after)) || (before && after))
     throw createError({ statusCode: 400, statusMessage: 'Invalid history cursor' })
   await connectDatabase()
+  if (await chatIsDeleted(sessionId))
+    return { messages: [], images: [], olderCursor: null, newerCursor: null }
   // Lazily import surviving legacy snapshots; never replace an existing archive.
   if (!await AgentHistory.exists({ sessionId })) {
     await withArchiveLock(sessionId, async () => {
-      if (await AgentHistory.exists({ sessionId }))
+      if (await AgentHistory.exists({ sessionId }) || await chatIsDeleted(sessionId))
         return
-      const chat = await AgentChat.findOne({ sessionId }).select('messages images')
-      if (chat?.messages?.length)
+      const chat = await AgentChat.findOne({ sessionId }).select('messages images deletedAt')
+      if (chat?.messages?.length && !(typeof isChatDeleted === 'function' ? isChatDeleted(chat) : Boolean(chat?.deletedAt)))
         await writeHistory(sessionId, chat.toObject().messages, chat.toObject().images)
     })
   }

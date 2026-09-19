@@ -6,6 +6,21 @@ import vm from 'node:vm'
 import ts from 'typescript'
 import * as vue from 'vue'
 import { confirmationMedia, reconcileConfirmationStates } from '../app/utils/agentConfirmationState.ts'
+import {
+  applyRemovedSessionIds,
+  applySuccessfulAgentDelete,
+  canDeleteAgent,
+  isEmptyDeletableAgent,
+  labStorageKey,
+  mergeRetainedCanvasImages,
+} from '../app/utils/agentLabDelete.ts'
+import {
+  collectProjectCanvasImages,
+  dropRemovedCanvasImages,
+  dropRemovedImageIdsFromMessages,
+  sessionIdsOwningImages,
+  stripRemovedImagesFromAgent,
+} from '../app/utils/canvasImageDelete.ts'
 
 const filename = new URL('../app/composables/useAgentLab.ts', import.meta.url)
 const source = readFileSync(filename, 'utf8').replace(/^import .*\n/gm, '').replaceAll('import.meta.client', 'true').replaceAll('import.meta.server', 'false').replaceAll('import.meta.hot', 'false')
@@ -20,9 +35,21 @@ function harness() {
   const unmounted = []
   const context = vm.createContext({
   useServiceConnection: () => ({ ensureConnected: async () => true }),
+    useI18n: () => ({ locale: vue.ref('zh') }),
     ...vue,
     confirmationMedia,
     reconcileConfirmationStates,
+    applyRemovedSessionIds,
+    applySuccessfulAgentDelete,
+    canDeleteAgent,
+    isEmptyDeletableAgent,
+    labStorageKey,
+    mergeRetainedCanvasImages,
+    collectProjectCanvasImages,
+    dropRemovedCanvasImages,
+    dropRemovedImageIdsFromMessages,
+    sessionIdsOwningImages,
+    stripRemovedImagesFromAgent,
     exports: {},
     console,
     crypto,
@@ -44,8 +71,17 @@ function harness() {
     isInternalAgentChatText: () => false,
     publicAgentChatText: t => t,
     publicGenerationFailMessage: t => t,
+    isGenerationFailureRetryable: () => false,
+    isNonRetryableGenerationFailure: () => false,
+    isAgentTransientMessage: () => false,
     agentRecoveryNotice: t => t,
     isDisconnectError: () => false,
+    isMediaUrl: () => true,
+    isMediaVideoUrl: () => false,
+    agentStopNote: () => '',
+    isAgentStopNote: () => false,
+    dropStaleStopNotesForPendingChoice: messages => messages,
+    buildOptimisticGenerationImages: () => [],
     recoverAgentTranscript: (local, remote) => remote.length ? remote : local,
     $fetch: async () => ({ items: [] }),
     fetch: async (url) => {

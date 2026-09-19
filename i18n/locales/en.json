@@ -180,6 +180,13 @@
   "chat": {
     "newAgent": "New",
     "switchAgent": "Switch agent",
+    "deleteAgent": "Delete conversation",
+    "deleteTitle": "Delete this conversation?",
+    "deleteDescription": "The conversation will be permanently deleted. Images, videos, and uploads already on this project's canvas will stay.",
+    "deleteBusy": "Stop the conversation or wait for uploads to finish before deleting it.",
+    "deletePending": "Deleting…",
+    "deleteFailed": "Could not delete this conversation.",
+    "deleteUnknown": "Could not confirm deletion. Try again.",
     "messageLabel": "Message to agent",
     "attachImage": "Attach image",
     "send": "Send",

@@ -1,7 +1,7 @@
 import type { IAgentChat } from '../models/agentChat'
 import type { IGenerationJob } from '../models/generationJob'
 import { isGenerationFailureRetryable } from '../../shared/types/generation'
-import { isSessionRemoved } from '../agent/sessionTombstones'
+import { aliveChatFilter, isChatDeleted, isSessionDeletionInFlight, isSessionRemoved } from '../agent/sessionTombstones'
 import { AgentChat } from '../models/agentChat'
 import { isAgentSessionId } from './agentChats'
 import { toPublicJob } from './generationResults'
@@ -243,6 +243,8 @@ function parseConfirmPolicy(value: unknown): 'auto' | 'when_needed' | 'always' {
   return value === 'auto' || value === 'when_needed' ? value : 'always'
 }
 export function runtimeFromDoc(doc: IAgentChat): AgentRuntimeSnapshot | null {
+  if (isChatDeleted(doc))
+    return null
   const runtime = doc.runtime && typeof doc.runtime === 'object'
     ? doc.runtime as Record<string, unknown>
     : null
@@ -273,8 +275,8 @@ export async function getAgentRuntime(sessionId: string) {
   if (!isAgentSessionId(sid))
     return null
   await connectDatabase()
-  const doc = await AgentChat.findOne({ sessionId: sid })
-  if (!doc)
+  const doc = await AgentChat.findOne(aliveChatFilter({ sessionId: sid }))
+  if (!doc || isChatDeleted(doc))
     return null
   return runtimeFromDoc(doc)
 }
@@ -291,7 +293,7 @@ export async function listAgentRuntimes(projectId = '') {
       { projectId: { $exists: false } },
     ]
   }
-  const docs = await AgentChat.find(filter)
+  const docs = await AgentChat.find(aliveChatFilter(filter))
     .sort({ lastEventAt: -1 })
     .limit(20)
   return docs.map(runtimeFromDoc).filter((item): item is AgentRuntimeSnapshot => Boolean(item))
@@ -312,10 +314,12 @@ export async function upsertAgentRuntime(input: {
   updatedAt?: unknown
 }) {
   const sessionId = String(input.sessionId || '').trim()
-  if (!isAgentSessionId(sessionId) || isSessionRemoved(sessionId))
+  if (!isAgentSessionId(sessionId) || isSessionRemoved(sessionId) || isSessionDeletionInFlight(sessionId))
     return null
   await connectDatabase()
   const existing = await AgentChat.findOne({ sessionId })
+  if (isChatDeleted(existing))
+    return null
   const projectId = clip(input.projectId, 80)
   const writeProjectId = await beginProjectWrite(projectId || existing?.projectId, { allowMissing: true })
   try {
@@ -395,14 +399,13 @@ export async function upsertAgentRuntime(input: {
         update.failCount = generated.filter(item => item.status === 'fail').length
       }
     }
-    return AgentChat.findOneAndUpdate({ sessionId }, {
+    return AgentChat.findOneAndUpdate(aliveChatFilter({ sessionId }), {
       $set: update,
       $setOnInsert: {
         sessionId,
-
         messages: existing?.messages || [],
       },
-    }, { upsert: true, returnDocument: 'after' })
+    }, { upsert: !existing, returnDocument: 'after' })
   }
   finally {
     endProjectWrite(writeProjectId)
@@ -410,14 +413,14 @@ export async function upsertAgentRuntime(input: {
 }
 export async function listInflightAgentRuntimes(limit = 40) {
   await connectDatabase()
-  const docs = await AgentChat.find({
+  const docs = await AgentChat.find(aliveChatFilter({
     'runtime.images': {
       $elemMatch: {
         status: 'generating',
         providerTaskId: { $type: 'string', $nin: ['', null] },
       },
     },
-  })
+  }))
     .sort({ lastEventAt: -1 })
     .limit(Math.max(1, Math.min(80, limit)))
   return docs.map(runtimeFromDoc).filter((item): item is AgentRuntimeSnapshot => Boolean(item))
@@ -425,9 +428,9 @@ export async function listInflightAgentRuntimes(limit = 40) {
 /** Sessions parked on a confirmation card (e.g. browser closed before Automatic continue). */
 export async function listPendingConfirmAgentRuntimes(limit = 40) {
   await connectDatabase()
-  const docs = await AgentChat.find({
+  const docs = await AgentChat.find(aliveChatFilter({
     'runtime.pendingConfirmation': { $type: 'object' },
-  })
+  }))
     .sort({ lastEventAt: -1 })
     .limit(Math.max(1, Math.min(80, limit)))
   return docs.map(runtimeFromDoc).filter((item): item is AgentRuntimeSnapshot => Boolean(item))
@@ -436,7 +439,7 @@ export async function listPendingConfirmAgentRuntimes(limit = 40) {
 export async function listRecentAutoAgentRuntimes(limit = 40) {
   await connectDatabase()
   const since = new Date(Date.now() - 6 * 60 * 60 * 1000)
-  const docs = await AgentChat.find({
+  const docs = await AgentChat.find(aliveChatFilter({
     runtime: { $type: 'object' },
     lastEventAt: { $gte: since },
     $or: [
@@ -445,7 +448,7 @@ export async function listRecentAutoAgentRuntimes(limit = 40) {
       { 'runtime.confirmPolicy': 'when_needed' },
       { confirmPolicy: 'when_needed' },
     ],
-  })
+  }))
     .sort({ lastEventAt: -1 })
     .limit(Math.max(1, Math.min(80, limit)))
   return docs.map(runtimeFromDoc).filter((item): item is AgentRuntimeSnapshot => Boolean(item))
@@ -492,7 +495,7 @@ export async function syncAgentRuntimeFromJob(job: IGenerationJob) {
     : await AgentChat.findOne({
         'runtime.images.id': imageId,
       })
-  if (!doc?.runtime || typeof doc.runtime !== 'object') {
+  if (!doc?.runtime || typeof doc.runtime !== 'object' || isChatDeleted(doc)) {
     return
   }
   const runtime = { ...(doc.runtime as Record<string, unknown>) }

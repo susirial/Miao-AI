@@ -14,6 +14,7 @@ import { dispatchQueuedJobs } from './generationQueue'
 import { removeStoredMedia } from './localMedia'
 import { assertProjectWritable, beginProjectDeletion, beginProjectWrite, endProjectDeletion, endProjectWrite } from './projectDeletion'
 import { isDocumentId } from './sqlite'
+import { mergeRetainedMediaKeys } from './agentChatDeletion'
 import { collectStoredMediaKeys } from './storedMediaUrl.mjs'
 
 const PROJECT_BUSY_STATES = ['queued', ...GENERATION_ACTIVE_STATES] as const
@@ -259,6 +260,7 @@ export async function deleteProject(projectId: string) {
       layouts.map(snapshotRecord),
       sessionRecords.map(record => record.payload),
     ], new Set(project.deletionMediaKeys || []))
+    mergeRetainedMediaKeys(chats, projectKeys)
 
     project.deletingAt = project.deletingAt || new Date()
     project.deletionSessionIds = sessionIds
@@ -274,13 +276,15 @@ export async function deleteProject(projectId: string) {
     await AgentChat.deleteMany({ projectId: id })
     await GenerationJob.deleteMany({ projectId: id })
 
+    const remainingChats = await AgentChat.find({})
     const otherKeys = collectStoredMediaKeys([
       (await GenerationJob.find({})).map(snapshotRecord),
-      (await AgentChat.find({})).map(snapshotRecord),
+      remainingChats.map(snapshotRecord),
       (await AgentHistory.find({})).map(snapshotRecord),
       (await CanvasLayout.find({})).map(snapshotRecord),
       listSessionRecordsExcept(sessionIds),
     ])
+    mergeRetainedMediaKeys(remainingChats, otherKeys)
     for (const key of projectKeys) {
       if (!otherKeys.has(key))
         await removeStoredMedia(key)

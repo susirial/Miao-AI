@@ -49,6 +49,9 @@ export interface IAgentChat {
   quality: string
   confirmPolicy: string
   runtime: Record<string, unknown> | null
+  deletedAt?: Date | null
+  deletionCompletedAt?: Date | null
+  retainedMediaKeys?: string[]
   lastEventAt: Date
   createdAt: Date
   updatedAt: Date

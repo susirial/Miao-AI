@@ -9,6 +9,7 @@ import { agentStopNote, dropStaleStopNotesForPendingChoice, isAgentStopNote } fr
 import { isMediaUrl, isMediaVideoUrl } from '~~/shared/utils/mediaUrl'
 import { confirmationMedia, reconcileConfirmationStates } from '~/utils/agentConfirmationState'
 import { buildOptimisticGenerationImages } from '~/utils/agentOptimisticGeneration'
+import { applyRemovedSessionIds, applySuccessfulAgentDelete, canDeleteAgent, isEmptyDeletableAgent, labStorageKey, mergeRetainedCanvasImages } from '~/utils/agentLabDelete'
 import { collectProjectCanvasImages, dropRemovedCanvasImages, dropRemovedImageIdsFromMessages, sessionIdsOwningImages, stripRemovedImagesFromAgent } from '~/utils/canvasImageDelete'
 import { useServiceConnection } from './useServiceConnection'
 
@@ -142,6 +143,7 @@ export interface AgentListItem {
   id: string
   title: string
   busy: boolean
+  canDelete?: boolean
 }
 type AgentTitleSource = 'default' | 'auto' | 'manual'
 interface StoredAgent {
@@ -168,6 +170,8 @@ interface StoredLab {
   images?: AgentImage[]
   confirmation?: ConfirmationPayload | null
   choice?: ChoicePayload | null
+  retainedCanvasImages?: AgentImage[]
+  removedSessionIds?: string[]
 }
 const STORAGE_PREFIX = 'miao-agent-lab-v2:'
 const LEGACY_STORAGE_PREFIX = 'polox-agent-lab-v2:'
@@ -461,6 +465,12 @@ function createAgentLab(options?: {
   const agentTitle = ref(DEFAULT_AGENT_TITLE)
   const titleSource = ref<AgentTitleSource>('default')
   const queueNotice = ref('')
+  const retainedCanvasImages = ref<AgentImage[]>([])
+  const removedSessionIds = ref<string[]>([])
+  const deletingAgentId = ref('')
+  const deleteError = ref('')
+  let disposed = false
+  let scopeEpoch = 0
   let streamEpoch = 0
   let activeTurns = 0
   let hydrating = false
@@ -471,12 +481,15 @@ function createAgentLab(options?: {
   const attaching = computed(() => attachments.value.some(item => item.status === 'uploading'))
   const readyAttachments = computed(() => attachments.value.filter(item => item.status === 'ready' && item.url))
   const canSwitchAgent = computed(() => {
-    if (attaching.value)
+    if (deletingAgentId.value || attaching.value)
       return false
     if (status.value === 'thinking' || status.value === 'calling_tool')
       return false
     return true
   })
+  function isDeletingActive() {
+    return Boolean(deletingAgentId.value && deletingAgentId.value === activeAgentId.value)
+  }
   const canCreateAgent = computed(() => canSwitchAgent.value && storedAgents.value.length < MAX_AGENTS)
   const agents = computed<AgentListItem[]>(() => storedAgents.value.map((agent) => {
     const active = agent.id === activeAgentId.value
@@ -484,16 +497,34 @@ function createAgentLab(options?: {
     const busy = active
       ? pending.value || (status.value !== 'idle')
       : Boolean(agent.busy || agent.pending || (agent.status && agent.status !== 'idle'))
-    return { id: agent.id, title, busy }
+    return {
+      id: agent.id,
+      title,
+      busy,
+      canDelete: canDeleteAgent(storedAgents.value.map((item) => {
+        const current = item.id === activeAgentId.value
+        return {
+          ...item,
+          attachments: current ? attachments.value : [],
+          confirmation: current ? confirmation.value : item.confirmation,
+          choice: current ? choice.value : item.choice,
+          draft: current ? draft.value : item.draft,
+          busy: current ? pending.value || status.value !== 'idle' : item.busy,
+          pending: current ? pending.value : item.pending,
+          status: current ? status.value : item.status,
+        }
+      }), agent.id, { attaching: attaching.value, deletingId: deletingAgentId.value }),
+    }
   }))
   const allImages = computed<AgentImage[]>(() => {
     void removedCanvasImageVersion.value
-    return collectProjectCanvasImages(storedAgents.value, images.value, removedCanvasImageIds)
+    return collectProjectCanvasImages(storedAgents.value, images.value, removedCanvasImageIds, retainedCanvasImages.value)
   })
   function sessionIdsForImages(imageIds: string[]) {
     return sessionIdsOwningImages([
       { sessionId: sessionId.value, images: images.value },
       ...storedAgents.value,
+      { images: retainedCanvasImages.value },
     ], imageIds)
   }
   function bumpStream() {
@@ -542,6 +573,10 @@ function createAgentLab(options?: {
     }
   }
   function commitCurrentAgent() {
+    if (deletingAgentId.value && deletingAgentId.value === activeAgentId.value)
+      return snapshotCurrent()
+    if (sessionId.value && removedSessionIds.value.includes(sessionId.value))
+      return snapshotCurrent()
     const current = snapshotCurrent()
     const list = storedAgents.value.slice()
     const idx = list.findIndex(agent => agent.id === current.id)
@@ -812,6 +847,8 @@ function createAgentLab(options?: {
     return {
       activeAgentId: activeAgentId.value,
       agents: storedAgents.value,
+      retainedCanvasImages: retainedCanvasImages.value,
+      removedSessionIds: removedSessionIds.value,
       sessionId: sessionId.value,
       messages: messages.value.map(item => ({
         ...item,
@@ -823,7 +860,7 @@ function createAgentLab(options?: {
     } satisfies StoredLab
   }
   function writeStore() {
-    if (!import.meta.client || !storageKey.value)
+    if (disposed || !import.meta.client || !storageKey.value)
       return
     trimLab()
     try {
@@ -850,7 +887,9 @@ function createAgentLab(options?: {
     }
   }
   async function persistChat(allowEmpty = false) {
-    if (!import.meta.client || !sessionId.value)
+    if (disposed || !import.meta.client || !sessionId.value)
+      return
+    if (removedSessionIds.value.includes(sessionId.value) || isDeletingActive())
       return
     if (!allowEmpty && !messages.value.length && !images.value.length)
       return
@@ -891,7 +930,19 @@ function createAgentLab(options?: {
     images.value = images.value.filter(image => !ids.has(image.id))
     messages.value = dropRemovedImageIdsFromMessages(messages.value, ids)
     storedAgents.value = storedAgents.value.map(agent => stripRemovedImagesFromAgent(agent, ids))
+    retainedCanvasImages.value = retainedCanvasImages.value.filter(image => !ids.has(image.id))
     writeStore()
+    if (projectScope.value && ids.size) {
+      try {
+        await $fetch(`/api/projects/${encodeURIComponent(projectScope.value)}/canvas-images`, {
+          method: 'DELETE',
+          body: { imageIds: [...ids] },
+        })
+      }
+      catch {
+        // Local canvas hide still stands if the retained cleanup request fails.
+      }
+    }
     await persistChat(true)
   }
   async function removeCanvasResult(taskId: string, extraUrls: string[] = []) {
@@ -900,7 +951,12 @@ function createAgentLab(options?: {
       return
     const urls = new Set(extraUrls.map(url => String(url || '').trim()).filter(Boolean))
     const imageId = id.startsWith('agent_') ? id.slice('agent_'.length) : ''
-    await removeCanvasImages(images.value
+    const pool = [
+      ...images.value,
+      ...retainedCanvasImages.value,
+      ...storedAgents.value.flatMap(agent => agent.images || []),
+    ]
+    await removeCanvasImages(pool
       .filter(image => image.id === id
         || image.id === imageId
         || `agent_${image.id}`.slice(0, 120) === id
@@ -927,7 +983,11 @@ function createAgentLab(options?: {
         })),
         images: [...(agent.images || [])],
       }))
-      const active = storedAgents.value.find(agent => agent.id === saved.activeAgentId)
+      retainedCanvasImages.value = saved.retainedCanvasImages || []
+      removedSessionIds.value = saved.removedSessionIds || []
+      const applied = applyRemovedSessionIds(storedAgents.value, removedSessionIds.value, saved.activeAgentId || '')
+      storedAgents.value = applied.agents
+      const active = storedAgents.value.find(agent => agent.id === applied.nextActiveId)
         || storedAgents.value[0]
       if (active)
         applyAgent(active)
@@ -1184,12 +1244,35 @@ function createAgentLab(options?: {
     if (!projectScope.value)
       return
     try {
+      const known = storedAgents.value.map(agent => agent.sessionId).filter(Boolean)
       const data = await $fetch<{
         items: Array<Parameters<typeof storedAgentFromChat>[0]>
+        retainedCanvasImages?: AgentImage[]
+        removedSessionIds?: string[]
       }>('/api/ai/agent-chats', {
-        query: { projectId: projectScope.value },
+        query: {
+          projectId: projectScope.value,
+          knownSessionIds: known.join(','),
+        },
       })
-      adoptRemoteAgents((data.items || []).map(storedAgentFromChat))
+      const removed = new Set([
+        ...removedSessionIds.value,
+        ...(data.removedSessionIds || []),
+      ].filter(Boolean))
+      if (removed.size) {
+        removedSessionIds.value = [...removed]
+        const applied = applyRemovedSessionIds(storedAgents.value, removed, activeAgentId.value)
+        storedAgents.value = applied.agents
+        if (applied.nextActiveId !== activeAgentId.value) {
+          const next = storedAgents.value.find(agent => agent.id === applied.nextActiveId) || emptyStoredAgent(DEFAULT_AGENT_TITLE)
+          if (!storedAgents.value.length)
+            storedAgents.value = [next]
+          applyAgent(next)
+        }
+      }
+      if (Array.isArray(data.retainedCanvasImages))
+        retainedCanvasImages.value = data.retainedCanvasImages
+      adoptRemoteAgents((data.items || []).map(storedAgentFromChat).filter(agent => !removed.has(agent.sessionId || '')))
     }
     catch {
       // Keep the local snapshot if archive is unavailable.
@@ -1218,11 +1301,15 @@ function createAgentLab(options?: {
           updatedAt?: number
         }>
       }
-      if (data.excludedSessionIds?.length && activeTurns === 0) {
-        const excluded = new Set(data.excludedSessionIds)
-        storedAgents.value = storedAgents.value.filter(agent => !excluded.has(agent.sessionId || ''))
-        if (excluded.has(sessionId.value)) {
-          const next = storedAgents.value[0] || emptyStoredAgent(DEFAULT_AGENT_TITLE)
+      const excluded = new Set([
+        ...(data.excludedSessionIds || []),
+        ...removedSessionIds.value,
+      ].filter(Boolean))
+      if (excluded.size && activeTurns === 0) {
+        const applied = applyRemovedSessionIds(storedAgents.value, excluded, activeAgentId.value)
+        storedAgents.value = applied.agents
+        if (applied.nextActiveId !== activeAgentId.value) {
+          const next = storedAgents.value.find(agent => agent.id === applied.nextActiveId) || emptyStoredAgent(DEFAULT_AGENT_TITLE)
           if (!storedAgents.value.length)
             storedAgents.value = [next]
           applyAgent(next)
@@ -1230,7 +1317,7 @@ function createAgentLab(options?: {
         writeStore()
       }
       const incoming = (data.items || [])
-        .filter(item => item.sessionId)
+        .filter(item => item.sessionId && !excluded.has(item.sessionId))
         .map((item) => {
           const messages = sanitizeChatMessages((item.messages || [])
             .filter(row => row.role === 'user' || row.role === 'assistant')
@@ -1828,6 +1915,8 @@ function createAgentLab(options?: {
     }
   }
   async function uploadAnnotationImage(file: File, label?: string) {
+    if (isDeletingActive())
+      throw new Error('This conversation is being deleted.')
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type) || file.size > 10 * 1024 * 1024)
       throw new Error('Upload a JPEG, PNG, WEBP, or GIF up to 10MB.')
     const id = await ensureSession()
@@ -1856,6 +1945,8 @@ function createAgentLab(options?: {
   }
 
   async function attachFiles(fileList: File[]) {
+    if (isDeletingActive())
+      return
     const accepted = fileList.filter((file) => {
       const type = file.type.toLowerCase()
       return type === 'image/jpeg' || type === 'image/png' || type === 'image/webp' || type === 'image/gif'
@@ -1930,6 +2021,8 @@ function createAgentLab(options?: {
     sketchName?: string
     annotationEdit?: ImageAnnotationEdit
   }): Promise<boolean> {
+    if (isDeletingActive())
+      return false
     if (options?.sketchFile) {
       if (pending.value || waitingForUser.value || attaching.value || status.value === 'generating' || status.value === 'queued')
         return false
@@ -2495,7 +2588,7 @@ function createAgentLab(options?: {
     }
   }
   async function resolveConfirmation(action: 'confirm' | 'cancel', params?: ConfirmationPayload['params'], approvedBy: 'agent' | 'user' = 'user') {
-    if (!confirmation.value || !sessionId.value)
+    if (isDeletingActive() || !confirmation.value || !sessionId.value)
       return
     const openConfirmation = confirmation.value
     const confirmationId = openConfirmation.id
@@ -2629,7 +2722,7 @@ function createAgentLab(options?: {
     }
   }
   async function resolveChoice(action: 'submit' | 'skip', answers?: ChoiceAnswer[]) {
-    if (!choice.value || !sessionId.value)
+    if (isDeletingActive() || !choice.value || !sessionId.value)
       return
     const choiceId = choice.value.id
     const message = messages.value.find(item => item.choice?.id === choiceId)
@@ -2746,6 +2839,11 @@ function createAgentLab(options?: {
     patchedInputIds.clear()
     storedAgents.value = []
     activeAgentId.value = ''
+    retainedCanvasImages.value = []
+    removedSessionIds.value = []
+    deletingAgentId.value = ''
+    deleteError.value = ''
+    scopeEpoch += 1
     agentTitle.value = DEFAULT_AGENT_TITLE
     titleSource.value = 'default'
     queueNotice.value = ''
@@ -2762,7 +2860,7 @@ function createAgentLab(options?: {
     attachments.value = []
   }
   function createAgent() {
-    if (!canCreateAgent.value)
+    if (deletingAgentId.value || !canCreateAgent.value)
       return
     commitCurrentAgent()
     void persistChat()
@@ -2774,7 +2872,7 @@ function createAgentLab(options?: {
     writeStore()
   }
   async function selectAgent(id: string) {
-    if (!id || id === activeAgentId.value || !canSwitchAgent.value)
+    if (deletingAgentId.value || !id || id === activeAgentId.value || !canSwitchAgent.value)
       return
     commitCurrentAgent()
     await persistChat()
@@ -2791,6 +2889,79 @@ function createAgentLab(options?: {
     }
     applyCanvasJobs(latestCanvasJobs)
     writeStore()
+  }
+  async function deleteAgent(id: string) {
+    const target = storedAgents.value.find(agent => agent.id === id)
+    if (!target || deletingAgentId.value)
+      return false
+    const current = snapshotCurrent()
+    const liveTarget = target.id === current.id
+      ? current
+      : target
+    if (!canDeleteAgent([
+      ...storedAgents.value.filter(agent => agent.id !== current.id),
+      current,
+    ], id, { attaching: attaching.value })) {
+      deleteError.value = 'chat.deleteBusy'
+      return false
+    }
+    const epoch = scopeEpoch
+    const projectId = projectScope.value
+    deletingAgentId.value = id
+    deleteError.value = ''
+    try {
+      if (liveTarget.sessionId) {
+        const retained = (liveTarget.images || []).filter(image => image.url)
+        const result = await $fetch<{
+          ok?: boolean
+          sessionId?: string
+          retainedCanvasImages?: AgentImage[]
+        }>(`/api/ai/agent-chats/${encodeURIComponent(liveTarget.sessionId)}`, {
+          method: 'DELETE',
+          query: { projectId },
+          body: { projectId, retainImages: retained },
+        })
+        if (epoch !== scopeEpoch || disposed)
+          return true
+        if (liveTarget.sessionId)
+          removedSessionIds.value = [...new Set([...removedSessionIds.value, liveTarget.sessionId])]
+        retainedCanvasImages.value = mergeRetainedCanvasImages(retainedCanvasImages.value, result.retainedCanvasImages || retained)
+      }
+      else if (!isEmptyDeletableAgent(liveTarget) && ((liveTarget.messages || []).length || (liveTarget.images || []).length)) {
+        deleteError.value = 'chat.deleteFailed'
+        return false
+      }
+      if (epoch !== scopeEpoch || disposed)
+        return true
+      const next = applySuccessfulAgentDelete(storedAgents.value, id, activeAgentId.value, () => emptyStoredAgent(nextDefaultTitle()))
+      if (next.switchActive) {
+        bumpStream()
+        hydrating = true
+        try {
+          applyAgent(next.fallback)
+        }
+        finally {
+          hydrating = false
+        }
+      }
+      storedAgents.value = next.agents
+      writeStore()
+      return true
+    }
+    catch (error) {
+      const status = Number((error as { statusCode?: unknown, status?: unknown }).statusCode || (error as { status?: unknown }).status || 0)
+      if (status === 409)
+        deleteError.value = 'chat.deleteBusy'
+      else if (!status)
+        deleteError.value = 'chat.deleteUnknown'
+      else
+        deleteError.value = 'chat.deleteFailed'
+      return false
+    }
+    finally {
+      if (deletingAgentId.value === id)
+        deletingAgentId.value = ''
+    }
   }
   let healthTimer: ReturnType<typeof setInterval> | undefined
   let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -2918,8 +3089,31 @@ function createAgentLab(options?: {
     onJobs.value = next?.onJobs
   }
   function flush() {
+    if (disposed)
+      return
     writeStore()
     void persistChat()
+  }
+  function dispose() {
+    if (disposed)
+      return
+    disposed = true
+    persistScope.stop()
+    bumpStream()
+    stopJobSync()
+    if (healthTimer) {
+      clearInterval(healthTimer)
+      healthTimer = undefined
+    }
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = undefined
+    }
+    if (persistTimer) {
+      clearTimeout(persistTimer)
+      persistTimer = undefined
+    }
+    scopeEpoch += 1
   }
   return {
     sessionId,
@@ -2947,6 +3141,9 @@ function createAgentLab(options?: {
     canSwitchAgent,
     createAgent,
     selectAgent,
+    deleteAgent,
+    deletingAgentId,
+    deleteError,
     sendMessage,
     stopAgent,
     stopping,
@@ -2961,8 +3158,27 @@ function createAgentLab(options?: {
     bindOptions,
     ensureHydrated,
     flush,
+    dispose,
     stashComposerDraft,
     applyCanvasJobs,
+  }
+}
+export function forgetAgentLab(projectId: string) {
+  const key = agentLabCacheKey(projectId)
+  const lab = key ? agentLabs.get(key) : undefined
+  lab?.dispose()
+  if (key)
+    agentLabs.delete(key)
+  if (!import.meta.client)
+    return
+  try {
+    localStorage.removeItem(labStorageKey(projectId))
+    localStorage.removeItem(`${LEGACY_STORAGE_PREFIX}${projectId || 'home'}`)
+    if (projectId)
+      localStorage.removeItem(`${LEGACY_STORAGE_PREFIX}local:${projectId}`)
+  }
+  catch {
+    // Private mode or quota should not block project deletion.
   }
 }
 if (import.meta.hot) {

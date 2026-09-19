@@ -4,7 +4,7 @@ import type { GenerationJobPublic } from '~~/shared/types/generation'
 import type { ImageAnnotationEdit, ImageAnnotationPoint, ImageAnnotationReference } from '~~/shared/utils/imageAnnotations'
 import type { SketchElement } from '~~/shared/utils/sketchToImage'
 import type { AgentChatMessage, AgentConfirmPolicy, AgentImage, AgentListItem, AgentQuality, AgentStatus, ChoiceAnswer, ConfirmationPayload, PendingAttachment } from '~/composables/useAgentLab'
-import { ArrowUp, ChevronDown, Paperclip, Plus, Square, X } from 'lucide-vue-next'
+import { ArrowUp, ChevronDown, Paperclip, Plus, Square, Trash2, X } from 'lucide-vue-next'
 import { normalizeComposerSelection } from '~~/shared/utils/agentComposerSelection'
 import { AGENT_MODELS, agentModelLogo, modelMention, readModelMentions, stripModelMentions } from '~~/shared/utils/agentModels'
 import { composerPlaceholderForSkills, findComposerCommand, PUBLIC_AGENT_SKILLS, readSkillCommands, searchAgentSkills, stripSkillCommands } from '~~/shared/utils/agentSkills'
@@ -36,6 +36,9 @@ const props = withDefaults(defineProps<{
   canSwitchAgent?: boolean
   composerOnly?: boolean
   hideTranscript?: boolean
+  deletePending?: boolean
+  deleteError?: string
+  deletingAgentId?: string
   uploadAnnotationImage?: (file: File) => Promise<ImageAnnotationReference>
 }>(), {
   projectJobs: () => [],
@@ -48,6 +51,9 @@ const props = withDefaults(defineProps<{
   hideTranscript: false,
   stopping: false,
   choiceOpen: false,
+  deletePending: false,
+  deleteError: '',
+  deletingAgentId: '',
 })
 const emit = defineEmits<{
   send: [
@@ -82,6 +88,9 @@ const emit = defineEmits<{
   createAgent: [
   ]
   selectAgent: [
+        id: string,
+  ]
+  deleteAgent: [
         id: string,
   ]
 }>()
@@ -354,7 +363,8 @@ const composerLocked = computed(() => props.pending
   || props.status === 'generating'
   || props.status === 'queued'
   || (props.confirmationOpen)
-  || props.choiceOpen)
+  || props.choiceOpen
+  || Boolean(props.deletingAgentId && props.deletingAgentId === props.activeAgentId))
 const agentRunning = computed(() => props.pending
   || props.status === 'thinking'
   || props.status === 'calling_tool'
@@ -660,11 +670,41 @@ const confirmPolicyLabel = computed(() => {
   return t('chat.alwaysReview')
 })
 const activeTitle = computed(() => props.agents.find(agent => agent.id === props.activeAgentId)?.title || t('chat.newAgent'))
-function setActiveAgent(value: unknown) {
-  const next = Array.isArray(value) ? value[0] : value
-  if (typeof next === 'string' && next)
-    emit('selectAgent', next)
+const deleteTargetId = ref('')
+const agentMenuOpen = ref(false)
+const deleteOpen = computed({
+  get: () => Boolean(deleteTargetId.value),
+  set: (open: boolean) => {
+    if (!open && !props.deletePending)
+      deleteTargetId.value = ''
+  },
+})
+const deleteTarget = computed(() => props.agents.find(agent => agent.id === deleteTargetId.value))
+const deleteErrorText = computed(() => {
+  const key = props.deleteError
+  if (!key)
+    return ''
+  return key.startsWith('chat.') ? t(key) : key
+})
+function setActiveAgent(id: string) {
+  if (id)
+    emit('selectAgent', id)
 }
+function requestDeleteAgent(id: string) {
+  if (!id || props.deletePending)
+    return
+  agentMenuOpen.value = false
+  deleteTargetId.value = id
+}
+function confirmDeleteAgent() {
+  if (!deleteTargetId.value || props.deletePending)
+    return
+  emit('deleteAgent', deleteTargetId.value)
+}
+watch(() => props.agents, (agents) => {
+  if (deleteTargetId.value && !agents.some(agent => agent.id === deleteTargetId.value))
+    deleteTargetId.value = ''
+})
 </script>
 
 <template>
@@ -699,7 +739,7 @@ function setActiveAgent(value: unknown) {
           v-if="activeBusy"
           class="size-3.5 shrink-0 text-muted-foreground"
         />
-        <DropdownMenu :modal="false">
+        <DropdownMenu v-model:open="agentMenuOpen" :modal="false">
           <DropdownMenuTrigger as-child>
             <Button
               type="button"
@@ -712,26 +752,42 @@ function setActiveAgent(value: unknown) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" class="min-w-48 max-w-72">
-            <DropdownMenuRadioGroup
-              :model-value="activeAgentId"
-              @update:model-value="setActiveAgent"
+            <div
+              v-for="agent in agents"
+              :key="agent.id"
+              class="group flex h-8 items-center gap-1 rounded-lg px-1 hover:bg-accent"
             >
-              <DropdownMenuRadioItem
-                v-for="agent in agents"
-                :key="agent.id"
-                :value="agent.id"
-                class="min-w-0"
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 :disabled="!canSwitchAgent && agent.id !== activeAgentId"
+                @click="setActiveAgent(agent.id)"
               >
-                <span class="flex min-w-0 flex-1 items-center gap-2">
-                  <span class="min-w-0 truncate">{{ agent.title }}</span>
-                  <Spinner
-                    v-if="agent.busy"
-                    class="size-3.5 shrink-0 text-muted-foreground"
-                  />
-                </span>
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
+                <span
+                  class="size-1.5 shrink-0 rounded-full"
+                  :class="agent.id === activeAgentId ? 'bg-foreground' : 'bg-transparent'"
+                />
+                <span class="min-w-0 truncate">{{ agent.title }}</span>
+                <Spinner
+                  v-if="agent.busy"
+                  class="size-3.5 shrink-0 text-muted-foreground"
+                />
+              </button>
+              <Button
+                v-if="agent.canDelete"
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                class="size-7 shrink-0 rounded-lg text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:text-destructive focus-visible:opacity-100"
+                :disabled="!agent.canDelete || deletePending"
+                :aria-label="t('chat.deleteAgent')"
+                @click.stop="requestDeleteAgent(agent.id)"
+                @keydown.enter.stop.prevent="requestDeleteAgent(agent.id)"
+                @keydown.space.stop.prevent="requestDeleteAgent(agent.id)"
+              >
+                <Trash2 class="size-3.5" />
+              </Button>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -1140,5 +1196,12 @@ function setActiveAgent(value: unknown) {
         </InputGroupAddon>
       </InputGroup>
     </form>
+    <AgentLabDeleteDialog
+      v-model:open="deleteOpen"
+      :pending="deletePending"
+      :error="deleteErrorText"
+      :busy="Boolean(deleteTarget?.busy)"
+      @confirm="confirmDeleteAgent"
+    />
   </section>
 </template>

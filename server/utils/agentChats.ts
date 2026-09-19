@@ -1,7 +1,7 @@
 import type { IAgentChat, IAgentChatImage, IAgentChatMessage } from '../models/agentChat'
 import { isGenerationFailureRetryable } from '../../shared/types/generation'
 import { isAgentTransientMessage } from '../../shared/utils/agentHistoryVisibility'
-import { isSessionRemoved } from '../agent/sessionTombstones'
+import { aliveChatFilter, isChatDeleted, isSessionDeletionInFlight, isSessionRemoved } from '../agent/sessionTombstones'
 import { AgentChat } from '../models/agentChat'
 import { archiveAgentUiHistory } from './agentHistory'
 import { beginProjectWrite, endProjectWrite } from './projectDeletion'
@@ -139,13 +139,17 @@ function statsFrom(messages: IAgentChatMessage[], images: IAgentChatImage[]) {
 }
 export async function upsertAgentChat(input: AgentChatUpsertInput) {
   const sessionId = String(input.sessionId || '').trim()
-  if (!isAgentSessionId(sessionId) || isSessionRemoved(sessionId))
+  if (!isAgentSessionId(sessionId) || isSessionRemoved(sessionId) || isSessionDeletionInFlight(sessionId))
     return null
   await connectDatabase()
   const existing = await AgentChat.findOne({ sessionId })
+  if (isChatDeleted(existing))
+    return null
   const projectId = clip(input.projectId, 80)
   const writeProjectId = await beginProjectWrite(projectId || existing?.projectId, { allowMissing: true })
   try {
+    if (isSessionRemoved(sessionId) || isSessionDeletionInFlight(sessionId) || isChatDeleted(await AgentChat.findOne({ sessionId }).select('deletedAt')))
+      return null
     const messages = input.messages !== undefined
       ? sanitizeMessages(input.messages)
       : existing?.messages || []
@@ -160,6 +164,8 @@ export async function upsertAgentChat(input: AgentChatUpsertInput) {
       ? mergeImages(existing.images, images)
       : images
     await archiveAgentUiHistory(sessionId, messages, images)
+    if (isSessionRemoved(sessionId) || isSessionDeletionInFlight(sessionId))
+      return null
     const stats = statsFrom(nextMessages, nextImages)
     const update: Record<string, unknown> = {
       lastEventAt: new Date(),
@@ -169,13 +175,10 @@ export async function upsertAgentChat(input: AgentChatUpsertInput) {
     }
     if (projectId)
       update.projectId = projectId
-    return AgentChat.findOneAndUpdate({ sessionId }, {
+    return AgentChat.findOneAndUpdate(aliveChatFilter({ sessionId }), {
       $set: update,
-      $setOnInsert: {
-        sessionId,
-
-      },
-    }, { upsert: true, returnDocument: 'after' })
+      $setOnInsert: existing ? undefined : { sessionId },
+    }, { upsert: !existing, returnDocument: 'after' })
   }
   finally {
     endProjectWrite(writeProjectId)
@@ -242,7 +245,8 @@ export async function getAgentChat(sessionId: string) {
   if (!isAgentSessionId(sid))
     return null
   await connectDatabase()
-  return AgentChat.findOne({ sessionId: sid })
+  const doc = await AgentChat.findOne(aliveChatFilter({ sessionId: sid }))
+  return doc && !isChatDeleted(doc) ? doc : null
 }
 export async function listAgentChats(projectId = '') {
   await connectDatabase()
@@ -251,7 +255,7 @@ export async function listAgentChats(projectId = '') {
   if (scoped) {
     filter.projectId = scoped
   }
-  return AgentChat.find(filter)
+  return AgentChat.find(aliveChatFilter(filter))
     .sort({ lastEventAt: -1 })
     .limit(20)
 }

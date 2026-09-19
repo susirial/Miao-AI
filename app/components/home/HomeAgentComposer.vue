@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<{
 })
 const { projects, selectedProjectId, createProject } = useProjects()
 const { enterSelectedProject, resolveTargetProjectId } = useAgentWorkspaceNav()
-const { sessionId: agentSessionId, messages, images, status, waitingForUserConfirm, waitingForUserChoice, pending, draft, attachments, attaching, error, sendMessage, stopAgent, stopping, attachFiles, attachUrls, removeAttachment, resolveConfirmation, resolveChoice, qualityPreference, confirmPolicy, agents, activeAgentId, canCreateAgent, canSwitchAgent, createAgent, selectAgent, queueNotice } = useAgentLab({ projectId: selectedProjectId })
+const { sessionId: agentSessionId, messages, images, status, waitingForUserConfirm, waitingForUserChoice, pending, draft, attachments, attaching, error, sendMessage, stopAgent, stopping, attachFiles, attachUrls, removeAttachment, resolveConfirmation, resolveChoice, qualityPreference, confirmPolicy, agents, activeAgentId, canCreateAgent, canSwitchAgent, createAgent, selectAgent, deleteAgent, deletingAgentId, deleteError, queueNotice } = useAgentLab({ projectId: selectedProjectId })
 const projectJobs = ref<GenerationJobPublic[]>([])
 const projectAssetsLoading = ref(false)
 const projectAssetsError = ref('')
@@ -210,6 +210,9 @@ function onProjectChange(value: string | number) {
             :active-agent-id="activeAgentId"
             :can-create-agent="canCreateAgent"
             :can-switch-agent="canSwitchAgent"
+            :deleting-agent-id="deletingAgentId"
+            :delete-pending="Boolean(deletingAgentId)"
+            :delete-error="deleteError"
             :composer-only="compact"
             :hide-transcript="!messages.length"
             @browse-assets="loadProjectAssets"
@@ -225,6 +228,7 @@ function onProjectChange(value: string | number) {
             @skip-choice="resolveChoice('skip')"
             @create-agent="createAgent"
             @select-agent="selectAgent"
+            @delete-agent="deleteAgent"
           />
         </div>
       </div>

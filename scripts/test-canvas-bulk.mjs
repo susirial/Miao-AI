@@ -165,7 +165,7 @@ test('stripping an upload from every stored agent removes duplicate session copi
 
 test('lab delete path filters allImages and ignores restored uploads', () => {
   const lab = readFileSync(new URL('../app/composables/useAgentLab.ts', import.meta.url), 'utf8')
-  assert.match(lab, /collectProjectCanvasImages\(storedAgents\.value, images\.value, removedCanvasImageIds\)/)
+  assert.match(lab, /collectProjectCanvasImages\(storedAgents\.value, images\.value, removedCanvasImageIds, retainedCanvasImages\.value\)/)
   assert.match(lab, /event\.type === 'image' && event\.image && !removedCanvasImageIds\.has\(event\.image\.id\)/)
   assert.match(lab, /storedAgents\.value = storedAgents\.value\.map\(agent => stripRemovedImagesFromAgent\(agent, ids\)\)/)
   assert.match(lab, /stripRemovedImagesFromAgent\(\{/)

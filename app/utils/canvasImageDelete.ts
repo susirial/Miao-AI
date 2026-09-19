@@ -28,8 +28,14 @@ export function collectProjectCanvasImages<T extends { id: string, url?: string 
   agents: Array<{ images?: T[] }>,
   current: T[],
   removedIds: Set<string>,
+  retained: T[] = [],
 ): T[] {
   const byId = new Map<string, T>()
+  for (const image of retained) {
+    if (!image.url || removedIds.has(image.id) || byId.has(image.id))
+      continue
+    byId.set(image.id, image)
+  }
   for (const agent of agents) {
     for (const image of agent.images || []) {
       if (!image.url || removedIds.has(image.id) || byId.has(image.id))

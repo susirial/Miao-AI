@@ -1,5 +1,6 @@
 import type { GenerationProjectList, GenerationProjectPublic } from '~~/shared/types/project'
 import { PROJECT_DELETE_CONFIRMATION } from '~~/shared/types/project'
+import { forgetAgentLab } from '~/composables/useAgentLab'
 
 function requestStatus(error: unknown) {
   const record = error && typeof error === 'object' ? error as { statusCode?: unknown, status?: unknown } : null
@@ -81,6 +82,7 @@ export function useProjects() {
         defaultProject: null,
       }
     }
+    forgetAgentLab(projectId)
     markProjectRemoved(projectId, result.defaultProjectId)
     if (result.defaultProject && !projects.value.some(item => item.id === result.defaultProject!.id))
       projects.value = [result.defaultProject, ...projects.value]

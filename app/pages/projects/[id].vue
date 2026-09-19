@@ -34,7 +34,7 @@ const router = useRouter()
 const nuxtApp = useNuxtApp()
 const projectId = computed(() => String(route.params.id || ''))
 const agentChat = ref<{ mentionSkill: (skillId: string) => Promise<void> } | null>(null)
-const { sessionId: agentSessionId, messages, images, allImages, status, waitingForUserConfirm, waitingForUserChoice, pending: agentPending, draft, attachments, attaching, error: agentError, sendMessage, stopAgent, stopping, attachFiles, uploadAnnotationImage, attachUrls, removeAttachment, removeCanvasImages, removeCanvasResult, sessionIdsForImages, resolveConfirmation, resolveChoice, qualityPreference, confirmPolicy, agents, activeAgentId, canCreateAgent, canSwitchAgent, createAgent, selectAgent, queueNotice, applyCanvasJobs, ensureHydrated } = useAgentLab({
+const { sessionId: agentSessionId, messages, images, allImages, status, waitingForUserConfirm, waitingForUserChoice, pending: agentPending, draft, attachments, attaching, error: agentError, sendMessage, stopAgent, stopping, attachFiles, uploadAnnotationImage, attachUrls, removeAttachment, removeCanvasImages, removeCanvasResult, sessionIdsForImages, resolveConfirmation, resolveChoice, qualityPreference, confirmPolicy, agents, activeAgentId, canCreateAgent, canSwitchAgent, createAgent, selectAgent, deleteAgent, deletingAgentId, deleteError, queueNotice, applyCanvasJobs, ensureHydrated } = useAgentLab({
   projectId,
   onJobs(jobs) {
     for (const job of jobs)
@@ -622,6 +622,9 @@ function onAttachCanvas(payload: {
           :active-agent-id="activeAgentId"
           :can-create-agent="canCreateAgent"
           :can-switch-agent="canSwitchAgent"
+          :deleting-agent-id="deletingAgentId"
+          :delete-pending="Boolean(deletingAgentId)"
+          :delete-error="deleteError"
           :upload-annotation-image="uploadAnnotationImage"
           @send="sendMessage"
           @stop="stopAgent"
@@ -634,6 +637,7 @@ function onAttachCanvas(payload: {
           @skip-choice="resolveChoice('skip')"
           @create-agent="createAgent"
           @select-agent="selectAgent"
+          @delete-agent="deleteAgent"
         />
       </template>
     </StudioSplit>

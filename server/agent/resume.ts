@@ -179,6 +179,9 @@ async function resumeAll() {
   if (resumePromise)
     return resumePromise
   resumePromise = (async () => {
+    const { finishIncompleteChatDeletions, loadPersistentSessionTombstones } = await import('../utils/agentChatDeletion')
+    await loadPersistentSessionTombstones()
+    await finishIncompleteChatDeletions()
     for (const session of bootSessions())
       scheduleSessionResume(session)
     await resumeRemoteInflight()

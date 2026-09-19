@@ -180,6 +180,13 @@
   "chat": {
     "newAgent": "新建",
     "switchAgent": "切换 Agent",
+    "deleteAgent": "删除对话",
+    "deleteTitle": "删除这条对话？",
+    "deleteDescription": "对话记录会永久删除。画布上已有的图、视频和上传素材会留在当前项目。",
+    "deleteBusy": "请先停止或等待上传完成，再删除这条对话。",
+    "deletePending": "正在删除…",
+    "deleteFailed": "无法删除这条对话。",
+    "deleteUnknown": "无法确认是否删除成功，请重试。",
     "messageLabel": "发送消息给 Agent",
     "attachImage": "添加图片",
     "send": "发送",
