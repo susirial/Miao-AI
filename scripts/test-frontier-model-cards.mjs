@@ -86,4 +86,5 @@ test('service connection keeps the text model picker and leaves image/video fami
   assert.doesNotMatch(dialogSource, /v-model="selectedImageFamily"/)
   assert.doesNotMatch(dialogSource, /v-model="selectedVideoFamily"/)
   assert.doesNotMatch(dialogSource, /selectedFamilyUnverified/)
+  assert.match(dialogSource, /nothingToTest/)
 })

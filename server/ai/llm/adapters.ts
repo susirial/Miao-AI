@@ -3,6 +3,7 @@ import type { ImageMaterialization } from './materialize'
 import type { CompleteTextOptions, LlmAdapter, LlmSnapshot, ProviderCapabilities, StreamChatOptions } from './types'
 import { assertValidToolTranscript } from '../../agent/toolTranscript'
 import { materializeMessages } from './materialize'
+import { describeLlmRequest, logLlmRequestFail, logLlmRequestStart } from './requestLog'
 import { assertChatResponse, consumeChatCompletionSse } from './sse'
 
 interface AdapterConfig {
@@ -122,30 +123,72 @@ export async function buildProviderRequest(
   }
 }
 
+async function executeProviderRequest<T>(
+  snapshot: LlmSnapshot,
+  kind: 'complete' | 'stream',
+  options: CompleteTextOptions | StreamChatOptions,
+  handle: (response: Response) => Promise<T>,
+) {
+  const request = await buildProviderRequest(snapshot, kind, options)
+  const stream = kind === 'stream' ? options as StreamChatOptions : undefined
+  const startedAt = Date.now()
+  const meta = describeLlmRequest({
+    kind,
+    snapshot,
+    url: request.url,
+    body: request.init.body,
+    messages: options.messages,
+    tools: stream?.tools,
+    requiredTool: stream?.requiredTool,
+    disableTools: stream?.disableTools,
+    aborted: Boolean(options.signal?.aborted),
+  })
+  logLlmRequestStart(meta)
+  let status: number | undefined
+  let ok: boolean | undefined
+  try {
+    const response = await fetch(request.url, request.init)
+    status = response.status
+    ok = response.ok
+    return await handle(response)
+  }
+  catch (error) {
+    logLlmRequestFail({
+      ...meta,
+      aborted: Boolean(options.signal?.aborted),
+      elapsedMs: Date.now() - startedAt,
+      status,
+      ok,
+      error,
+    })
+    throw error
+  }
+}
+
 function createAdapter(config: AdapterConfig): LlmAdapter {
   return {
     provider: config.provider,
     capabilities: config.capabilities,
     async completeText(snapshot, options) {
-      const request = await buildProviderRequest(snapshot, 'complete', options)
-      const response = await fetch(request.url, request.init)
-      await assertChatResponse(response, config.name)
-      const payload = await response.json() as {
-        choices?: Array<{ message?: { content?: string | null } }>
-        error?: string | { message?: string }
-      }
-      if (payload.error)
-        throw new Error(typeof payload.error === 'string' ? payload.error : payload.error.message || `${config.name} returned an error.`)
-      return String(payload.choices?.[0]?.message?.content || '').trim()
+      return executeProviderRequest(snapshot, 'complete', options, async (response) => {
+        await assertChatResponse(response, config.name)
+        const payload = await response.json() as {
+          choices?: Array<{ message?: { content?: string | null } }>
+          error?: string | { message?: string }
+        }
+        if (payload.error)
+          throw new Error(typeof payload.error === 'string' ? payload.error : payload.error.message || `${config.name} returned an error.`)
+        return String(payload.choices?.[0]?.message?.content || '').trim()
+      })
     },
     async streamChat(snapshot, options) {
-      const request = await buildProviderRequest(snapshot, 'stream', options)
-      const response = await fetch(request.url, request.init)
-      await consumeChatCompletionSse({
-        response,
-        providerName: config.name,
-        signal: options.signal,
-        onDelta: options.onDelta,
+      await executeProviderRequest(snapshot, 'stream', options, async (response) => {
+        await consumeChatCompletionSse({
+          response,
+          providerName: config.name,
+          signal: options.signal,
+          onDelta: options.onDelta,
+        })
       })
     },
   }

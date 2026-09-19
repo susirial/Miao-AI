@@ -57,6 +57,8 @@ Service connection now has three independent picks: text, image, and video. Home
 
 The agent shows a confirmation card before it generates. Annotated image edit no longer sends remapped TOS stills as vision URLs; Agnes Image inlines reachable HTTP(S) stills as data URIs instead.
 
+Save-and-test now says so when no API key is configured, instead of looking like the button did nothing. Failed model requests log the host and error cause without writing keys.
+
 #### Text to image · Agnes Image 2.5 Flash
 
 Describe the frame in natural language. The confirmation card lists the selected model and prompt, as in this Michael Jordan slam-dunk text-to-image job.

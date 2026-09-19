@@ -48,6 +48,7 @@ function loadPath(path, mocks = {}, globals = {}, cache = new Map()) {
     TextEncoder,
     URL,
     fetch,
+    console,
     setTimeout,
     clearTimeout,
     ...globals,
@@ -550,4 +551,84 @@ test('SSE reports provider errors, non-2xx, empty streams, and aborts', async ()
   controller.abort()
   await assert.rejects(pending, error => error?.name === 'AbortError')
   assert.equal(cancelled, true)
+})
+
+test('request logs name Seed 2.1 / Ark and unwrap fetch cause without the api key', () => {
+  const requestLog = loadPath(resolve(root, 'server/ai/llm/requestLog.ts'))
+  const reset = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET', syscall: 'read', errno: -54 })
+  const failed = Object.assign(new TypeError('fetch failed'), { cause: reset })
+  const chain = requestLog.describeErrorChain(failed)
+  assert.equal(chain[0].message, 'fetch failed')
+  assert.equal(chain[1].code, 'ECONNRESET')
+  assert.equal(chain[1].syscall, 'read')
+
+  const snapshot = {
+    provider: 'ark',
+    catalogModelId: 'ark/seed-2.1-pro',
+    model: 'doubao-seed-2-1-pro-260628',
+    apiKey: 'ark-secret-must-not-log',
+    textReady: true,
+    settingsRevision: 'rev-1',
+  }
+  const safe = requestLog.safeLlmSnapshot(snapshot)
+  assert.equal(safe.provider, 'ark')
+  assert.equal(safe.catalogModelId, 'ark/seed-2.1-pro')
+  assert.equal(safe.model, 'doubao-seed-2-1-pro-260628')
+  assert.equal(safe.hasApiKey, true)
+  assert.equal('apiKey' in safe, false)
+  assert.equal(JSON.stringify(safe).includes('ark-secret'), false)
+
+  const meta = requestLog.describeLlmRequest({
+    kind: 'stream',
+    snapshot,
+    url: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+    body: '{"model":"doubao-seed-2-1-pro-260628"}',
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: 'hi' }, { type: 'image_url', image_url: { url: 'https://example.com/a.png' } }] },
+    ],
+    tools: [{ type: 'function', function: { name: 'generate_video' } }],
+    requiredTool: 'generate_video',
+    error: failed,
+  })
+  assert.equal(meta.host, 'ark.cn-beijing.volces.com')
+  assert.equal(meta.imageParts, 1)
+  assert.deepEqual(meta.tools, ['generate_video'])
+  assert.equal(meta.bodyBytes, '{"model":"doubao-seed-2-1-pro-260628"}'.length)
+  assert.equal(meta.error[1].code, 'ECONNRESET')
+  assert.equal(JSON.stringify(meta).includes('ark-secret'), false)
+})
+
+test('streamChat failure logs Ark host and ECONNRESET instead of a bare fetch failed', async () => {
+  const logs = []
+  const capture = (...args) => logs.push(args)
+  const adaptersWithFetch = loadPath(resolve(root, 'server/ai/llm/adapters.ts'), llmMocks(), {
+    fetch: async () => {
+      throw Object.assign(new TypeError('fetch failed'), {
+        cause: Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET', syscall: 'read' }),
+      })
+    },
+    console: { info: capture, error: capture, warn: capture, log: capture },
+  })
+  await assert.rejects(() => adaptersWithFetch.LLM_ADAPTERS.ark.streamChat({
+    provider: 'ark',
+    catalogModelId: 'ark/seed-2.1-pro',
+    model: 'doubao-seed-2-1-pro-260628',
+    apiKey: 'ark-secret-must-not-log',
+    textReady: true,
+    capabilities: adaptersWithFetch.PROVIDER_CONFIGS.ark.capabilities,
+    settingsRevision: 'rev-seed',
+  }, {
+    messages: [{ role: 'user', content: 'prompt' }],
+    tools: [{ type: 'function', function: { name: 'generate_video' } }],
+    onDelta() {},
+  }), /fetch failed/)
+
+  const start = logs.find(entry => entry[0] === '[llm request]' && entry[1]?.phase === 'start')
+  const fail = logs.find(entry => entry[0] === '[llm request]' && entry[1]?.phase === 'fail')
+  assert.equal(start[1].provider, 'ark')
+  assert.equal(start[1].catalogModelId, 'ark/seed-2.1-pro')
+  assert.equal(start[1].host, 'ark.cn-beijing.volces.com')
+  assert.deepEqual(start[1].tools, ['generate_video'])
+  assert.equal(fail[1].error[1].code, 'ECONNRESET')
+  assert.equal(JSON.stringify(logs).includes('ark-secret'), false)
 })

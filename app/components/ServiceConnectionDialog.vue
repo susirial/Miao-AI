@@ -113,6 +113,8 @@ const resultRows = computed(() => results.value
       { id: 'tos', label: 'TOS', result: results.value.tos },
     ].filter(row => !row.result.skipped)
   : [])
+const nothingToTest = computed(() => Boolean(results.value) && resultRows.value.length === 0)
+const testNotice = ref<HTMLElement | null>(null)
 const capabilityRows = computed(() => [
   { label: t('service.text'), ready: Boolean(status.value?.textReady) },
   { label: t('service.image'), ready: Boolean(status.value?.imageReady) },
@@ -208,6 +210,8 @@ async function testConnection() {
     if (result.superseded)
       error.value = 'Settings changed in another window. Test the current settings again.'
     showSavedKeys()
+    await nextTick()
+    testNotice.value?.scrollIntoView({ block: 'nearest' })
   }
   catch {
     error.value = 'Connection test could not finish. Settings may have changed in another window.'
@@ -387,6 +391,9 @@ async function testConnection() {
               {{ row.result.ok ? '✓' : '⚠' }} <span class="font-medium">{{ row.label }}:</span> {{ row.result.message }}
             </p>
           </div>
+          <p v-else-if="nothingToTest" ref="testNotice" role="status" aria-live="polite" class="text-sm text-warning">
+            {{ t('service.nothingToTest') }}
+          </p>
           <p v-if="error" role="alert" aria-live="assertive" class="text-sm text-destructive">
             {{ error }}
           </p>

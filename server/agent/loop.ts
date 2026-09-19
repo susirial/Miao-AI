@@ -10,6 +10,7 @@ import { AGENT_MODELS, findAgentModelTool, readModelMentions, registeredModelToo
 import { AGENT_INTERRUPT_NOTE, agentStopNote, isAgentStopNote } from '~~/shared/utils/agentStopNote'
 import { cleanAssetName } from '~~/shared/utils/assetName'
 import { validateImageAnnotationEdit } from '~~/shared/utils/imageAnnotations'
+import { safeLlmSnapshot } from '../ai/llm/requestLog'
 import { activeLlmSnapshot, withLlmSnapshot } from '../ai/llm/registry'
 import { canonicalMediaUrl } from '../utils/storedMediaUrl.mjs'
 import { annotationAskUserArgs, annotationBrief, assertAnnotationQuestion } from './annotationBrief'
@@ -1306,6 +1307,7 @@ async function runAgentLoopWithSnapshot(sessionId: string, emit: Emit, signal?: 
 }
 export function runAgentLoop(sessionId: string, emit: Emit, signal?: AbortSignal) {
   const snapshot = activeLlmSnapshot()
+  console.info('[agent loop]', { sessionId, ...safeLlmSnapshot(snapshot) })
   return withLlmSnapshot(snapshot, () => runAgentLoopWithSnapshot(sessionId, emit, signal))
 }
 function parseAttachmentUrls(value: unknown) {

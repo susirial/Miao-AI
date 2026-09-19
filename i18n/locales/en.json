@@ -402,7 +402,8 @@
     "clear": "Clear",
     "close": "Close",
     "saveTest": "Save and test configured providers",
-    "testing": "Testing providers…"
+    "testing": "Testing providers…",
+    "nothingToTest": "No providers are configured yet. Add at least one API key, then save and test."
   },
   "tools": {
     "usefulTools": "Useful tools",

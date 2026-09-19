@@ -402,7 +402,8 @@
     "clear": "清空",
     "close": "关闭",
     "saveTest": "保存并测试已配置服务",
-    "testing": "正在测试服务…"
+    "testing": "正在测试服务…",
+    "nothingToTest": "还没有可测试的服务。请先填写至少一项 API 密钥后再保存。"
   },
   "tools": {
     "usefulTools": "实用工具",

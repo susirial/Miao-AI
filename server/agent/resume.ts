@@ -5,6 +5,8 @@ import { GenerationJob } from '../models/generationJob'
 import { agentResultTaskId } from '../utils/agentJobs'
 import { generationResultUrls } from '../utils/generationResults'
 import { connectDatabase } from '../utils/sqlite'
+import { activeLlmSnapshot } from '../ai/llm/registry'
+import { describeErrorChain, safeLlmSnapshot } from '../ai/llm/requestLog'
 import { SESSION_ORPHAN_MS } from './policy'
 import { adoptStoredSnapshot, bootSessions, persistNow, upsertImage } from './session'
 import { fetchRemoteInflightSessions, fetchRemotePendingConfirmSessions, fetchRemoteRecentAutoSessions } from './sessionStore'
@@ -25,7 +27,11 @@ async function maybeContinueSession(session: AgentSession) {
     await continueAgentSession(session.id)
   }
   catch (error) {
-    console.error('[agent session continue]', session.id, error)
+    console.error('[agent session continue]', {
+      sessionId: session.id,
+      ...safeLlmSnapshot(activeLlmSnapshot()),
+      error: describeErrorChain(error),
+    }, error)
   }
   finally {
     continueInFlight.delete(session.id)

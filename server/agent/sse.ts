@@ -1,4 +1,5 @@
 import type { AgentEvent } from './types'
+import { describeErrorChain } from '../ai/llm/requestLog'
 
 export function encodeSseEvent(event: AgentEvent) {
   return `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`
@@ -46,6 +47,7 @@ export function createAgentEventStream(
         )
         if (!aborted && !closed) {
           const message = error instanceof Error ? error.message : 'Agent service error'
+          console.error('[agent sse]', { message, error: describeErrorChain(error) })
           emit({ type: 'error', message })
           emit({ type: 'done' })
         }
